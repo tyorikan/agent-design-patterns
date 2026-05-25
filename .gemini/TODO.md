@@ -65,6 +65,6 @@
 - [x] test_agent_structure.py を Workflow 対応に書き直し
 - [x] 全50テスト PASS 確認
 - [x] .gemini/ ドキュメント更新（DESIGN.md, REQUIREMENTS.md, TODO.md）
-- [ ] 各パターン README.md の v2 更新
-- [ ] プロジェクト README.md の v2 更新
-- [ ] .agents/skills/*.md の v2 更新
+- [x] 各パターン README.md の v2 更新
+- [x] プロジェクト README.md の v2 更新
+- [x] .agents/skills/*.md の v2 更新
