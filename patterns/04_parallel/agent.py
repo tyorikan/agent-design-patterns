@@ -1,7 +1,10 @@
-"""Parallel Pattern - マルチソース AI ニュース集約エージェント（修正版）。
+"""Parallel Pattern - マルチソース AI ニュース集約エージェント（Workflow v2）。
+
+ADK v2 の Workflow ネストタプルで Parallel fan-out/fan-in を実現。
+('START', (a, b, c, d), aggregator) で並列 → 集約を表現する。
 
 ADK の {変数名} はセッション状態からの参照。
-ParallelAgent の各サブエージェントは最初から並列実行されるので
+fan-out の各エージェントは最初から並列実行されるので
 セッション状態には値が入っていない。
 → 最初の並列エージェントはユーザーメッセージから直接読み取る形にする。
 
@@ -15,7 +18,8 @@ ParallelAgent の各サブエージェントは最初から並列実行される
 import sys
 from pathlib import Path
 
-from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -157,24 +161,25 @@ synthesizer = LlmAgent(
 )
 
 # =====================================================
-# Sequential: 並列収集 → 集約
+# Workflow ネストタプルで Parallel fan-out/fan-in を実現
+# ('START', (a, b, c, d), synthesizer)
+#   → 4エージェント並列実行 → synthesizer で集約
 # =====================================================
-root_agent = SequentialAgent(
+root_agent = Workflow(
     name="news_aggregator",
     description="複数ソースを並列調査して統合レポートを作成するニュース集約システム",
-    sub_agents=[
-        # Step 1: 4エージェントを並列実行（レイテンシ削減）
-        ParallelAgent(
-            name="parallel_researchers",
-            description="複数の専門エージェントが同時並行でリサーチを実行",
-            sub_agents=[
+    edges=[
+        (
+            "START",
+            # fan-out: 4エージェントを並列実行（レイテンシ削減）
+            (
                 google_ai_researcher,
                 openai_researcher,
                 regulation_researcher,
                 industry_researcher,
-            ],
+            ),
+            # fan-in: 全並列結果を集約
+            synthesizer,
         ),
-        # Step 2: 全並列結果を集約
-        synthesizer,
     ],
 )

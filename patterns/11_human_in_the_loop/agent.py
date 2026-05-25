@@ -4,16 +4,17 @@
     エージェントが処理を一時停止し、人間の判断を待つパターン。
     高リスクな操作や主観的な判断が必要な場合に使用する。
 
-    実装アプローチ:
-    ADK では ToolContext.actions.escalate を使うことで
-    LoopAgent の反復を終了させ、人間の入力を求めることができる。
-    ここではコンソール入力を使って人間の承認をシミュレートする。
+    ADK v2 実装:
+    Workflow の edges で content_creator → compliance_checker → final_publisher
+    の3ステージを定義。compliance_checker が HUMAN_REVIEW_REQUIRED を返した場合、
+    人間のレビュー入力をセッション状態に設定してから final_publisher を実行する。
 """
 
 import sys
 from pathlib import Path
 
 from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -135,16 +136,16 @@ final_publisher = LlmAgent(
 )
 
 # =====================================================
-# Human-in-the-Loop ワークフロー
+# Human-in-the-Loop ワークフロー (ADK v2 Workflow)
 # =====================================================
-# このパターンでは demo.py が人間の入力を受け取り、
-# セッション状態に追加してエージェントの続きを実行する
+# Workflow edges で3ステージのパイプラインを定義。
+# compliance_checker → final_publisher の間で人間のレビューが必要な場合は、
+# demo.py がセッション状態 (human_review) に入力を追加して
+# final_publisher を別途実行する。
 # =====================================================
-root_agent = content_creator  # デモ用: 最初にコンテンツ生成のみ
-
-# フルワークフロー（demo.py で段階実行）
-workflow_agents = {
-    "creator": content_creator,
-    "compliance": compliance_checker,
-    "publisher": final_publisher,
-}
+root_agent = Workflow(
+    name="content_approval_workflow",
+    edges=[
+        ("START", content_creator, compliance_checker, final_publisher),
+    ],
+)

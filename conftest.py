@@ -5,7 +5,7 @@
 ヘルパー関数:
     - load_pattern_agent: パターンの agent.py を安全にロード（モジュールキャッシュ問題を回避）
     - run_agent_final_response: is_final_response() のテキストを取得（LlmAgent 単体用）
-    - run_agent_all_text: 全イベントからテキスト収集（LoopAgent 系用）
+    - run_agent_all_text: 全イベントからテキスト収集（Workflow 系用）
     - run_agent_trajectory: エージェントの発言トラジェクトリを取得
 """
 
@@ -87,7 +87,7 @@ async def run_agent_final_response(agent, app_name: str, query: str) -> str:
 async def run_agent_all_text(agent, app_name: str, query: str) -> str:
     """全イベントからテキストを収集するヘルパー。
 
-    LoopAgent / SequentialAgent(LoopAgent含む) は is_final_response() が
+    Workflow（ループや Sequential を含む）は is_final_response() が
     True にならない場合があるため、全イベントからテキストを集約する。
     """
     from google.adk.runners import Runner

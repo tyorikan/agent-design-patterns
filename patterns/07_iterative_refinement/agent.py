@@ -1,6 +1,13 @@
-"""Iterative Refinement Pattern - 自己改善型ドキュメント作成エージェント。
+"""Iterative Refinement Pattern - 自己改善型ドキュメント作成エージェント（Workflow v2）。
 
 パターンの特徴:
+    Workflow の条件付きサイクルで1エージェントが自己評価スコアを使って
+    自律的に改善を繰り返す。
+
+    edges の最後の dict が条件付きサイクルを定義:
+    - doc_refiner が 'REVISE' を返す → doc_refiner に戻る（自己ループ）
+    - それ以外 → ワークフロー終了
+
     Review & Critique (Lv.6) との違い:
     - Lv.6: Generator（生成）+ Critic（批評）の2役割が別エージェント
     - Lv.7: 1エージェントが自己評価スコアを使って自律的に改善
@@ -11,7 +18,8 @@
 import sys
 from pathlib import Path
 
-from google.adk.agents import LlmAgent, LoopAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -21,12 +29,13 @@ settings = get_settings()
 
 # =====================================================
 # ドキュメント改善エージェント（自己評価 + 改善）
+# ★ ルーティング: REVISE を返すと自己ループ継続、それ以外で終了
 # =====================================================
 doc_refiner = LlmAgent(
     name="doc_refiner",
     model=settings.default_model,
     description="技術ドキュメントを自己評価しながら反復的に改善する",
-    instruction="""
+    instruction="""\
 あなたは技術文書作成の専門家です。
 
 ## タスク: 技術ドキュメントの作成と改善
@@ -58,16 +67,28 @@ doc_refiner = LlmAgent(
 [各項目のスコアと理由]
 判定: スコアが85以上なら [COMPLETE] 、未満なら [CONTINUE]
 ---END---
+
+⚠️ 重要:
+- スコアが 85 未満の場合は route を REVISE にしてください。
 """,
     output_key="previous_doc_and_score",
 )
 
 # =====================================================
-# Iterative Refinement ループ
+# Workflow（条件付きサイクル - 自己ループ）
 # =====================================================
-root_agent = LoopAgent(
+# edges の構造:
+#   ('START', doc_refiner, {'REVISE': doc_refiner})
+#
+# 動作:
+#   START → doc_refiner
+#     → doc_refiner が 'REVISE' を返す → doc_refiner に戻る（自己ループ）
+#     → それ以外 → ワークフロー終了
+# =====================================================
+root_agent = Workflow(
     name="doc_refinement_loop",
     description="品質スコア 85 以上になるまで自己改善を繰り返す技術ドキュメント生成システム",
-    sub_agents=[doc_refiner],
-    max_iterations=5,
+    edges=[
+        ("START", doc_refiner, {"REVISE": doc_refiner}),
+    ],
 )

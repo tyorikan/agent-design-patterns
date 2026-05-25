@@ -1,4 +1,7 @@
-"""Capstone: Enterprise Research Agent - 全デザインパターン統合。
+"""Capstone: Enterprise Research Agent - 全デザインパターン統合（Workflow 版）。
+
+ADK v2 Workflow API を使用。
+旧 SequentialAgent / ParallelAgent / LoopAgent を Workflow に移行。
 
 このエージェントは、学んだ全パターンを組み合わせて
 「企業の技術戦略評価レポート」を自動生成する。
@@ -6,9 +9,9 @@
 ## 使用するパターン
 
 1. Coordinator (Lv.8):  ユーザーリクエストを専門チームに振り分ける
-2. Parallel (Lv.4):     複数ソースから同時並行でデータ収集
-3. Sequential (Lv.3):   データ収集 → 分析 → レポート生成の順次処理
-4. Loop (Lv.5):         品質が基準に達するまでレポートを改善
+2. Parallel:            複数ソースから同時並行でデータ収集（ネストタプル）
+3. Sequential:          データ収集 → 分析 → レポート生成の順次処理（チェーンタプル）
+4. Loop:                品質が基準に達するまでレポートを改善（条件付きサイクル）
 5. Review & Critique:   最終レポートを厳格に評価
 
 ## アーキテクチャ図
@@ -17,29 +20,26 @@
 User Request
     │
     ▼
-[Coordinator]  ← ユーザーの意図を解釈
+[Workflow: root_agent]
     │
-    ▼
-[SequentialAgent: main_pipeline]
+    ├── [Coordinator]                        ← ユーザーの意図を解釈
     │
-    ├── [ParallelAgent: data_collection]
-    │   ├── [web_researcher]      → web_data
-    │   ├── [tech_researcher]     → tech_data
-    │   └── [financial_researcher]→ financial_data
+    ├── [Parallel: (web, tech, financial)]  → 各 *_data
     │
-    ├── [analysis_agent]          → analysis_result
+    ├── [analysis_agent]                    → analysis_result
     │
-    └── [LoopAgent: report_refinement]
-            ├── [report_writer]   → report_draft
-            └── [report_critic]   → critic_feedback
-                  max_iterations=3
+    ├── [report_writer]                     → report_draft
+    │
+    └── [report_critic]                     → critic_feedback
+          ↺ NEEDS_IMPROVEMENT → report_writer（条件付きサイクル）
 ```
 """
 
 import sys
 from pathlib import Path
 
-from google.adk.agents import LlmAgent, LoopAgent, ParallelAgent, SequentialAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -55,7 +55,7 @@ web_researcher = LlmAgent(
     name="enterprise_web_researcher",
     model=settings.default_model,
     description="企業の公式情報・プレスリリース・製品情報を収集する",
-    instruction="""
+    instruction="""\
 あなたは企業リサーチの専門家です。
 
 ユーザーが分析対象として指定した企業について、
@@ -85,7 +85,7 @@ tech_researcher = LlmAgent(
     name="enterprise_tech_researcher",
     model=settings.default_model,
     description="企業の技術スタック・エンジニアリング文化・オープンソース活動を調査する",
-    instruction="""
+    instruction="""\
 あなたは技術調査の専門家です。
 
 ユーザーが分析対象として指定した企業の技術力について、
@@ -119,7 +119,7 @@ financial_researcher = LlmAgent(
     name="enterprise_financial_researcher",
     model=settings.default_model,
     description="企業の財務パフォーマンス・成長性・投資家動向を調査する",
-    instruction="""
+    instruction="""\
 あなたは財務調査の専門家です。
 
 ユーザーが分析対象として指定した企業の財務状況について、
@@ -158,7 +158,7 @@ analysis_agent = LlmAgent(
     name="enterprise_analyst",
     model=settings.default_model,
     description="収集したデータを統合して戦略的分析を行う",
-    instruction="""
+    instruction="""\
 あなたは戦略コンサルタントです。
 以下の収集データを統合して、包括的な戦略分析を行ってください。
 
@@ -204,14 +204,14 @@ analysis_agent = LlmAgent(
 )
 
 # =====================================================
-# Layer: レポート生成 + レビューループ（Loop）
+# Layer: レポート生成 + レビュー（条件付きサイクル）
 # =====================================================
 
 report_writer = LlmAgent(
     name="enterprise_report_writer",
     model=settings.default_model,
     description="分析データからエグゼクティブレポートを生成・改善する",
-    instruction="""
+    instruction="""\
 あなたはビジネスライターです。
 
 ## 分析データ
@@ -263,7 +263,7 @@ report_critic = LlmAgent(
     name="enterprise_report_critic",
     model=settings.default_model,
     description="レポートの品質を厳格に評価してフィードバックを提供する",
-    instruction="""
+    instruction="""\
 あなたは品質管理の専門家です。
 以下のエグゼクティブレポートを厳格に評価してください。
 
@@ -290,67 +290,47 @@ report_critic = LlmAgent(
 
 ### 最終判定
 スコア 85 以上: [REPORT_APPROVED] - 配布可能
-スコア 85 未満: [NEEDS_IMPROVEMENT] - 改善して再提出
+スコア 85 未満: NEEDS_IMPROVEMENT - 改善して再提出
 """,
     output_key="critic_feedback",
 )
 
 # =====================================================
-# 並列データ収集レイヤー
+# メインパイプライン + Coordinator 統合（Workflow）
+#   ※ Workflow は BaseAgent ではないため sub_agents に入れられない。
+#   ※ 代わりに coordinator を Workflow edges の最初のノードとして組み込む。
+#
+#   1. Coordinator（ユーザーリクエスト解釈）
+#   2. 並列データ収集（ネストタプル）
+#   3. 統合分析
+#   4. レポート生成 → 評価（条件付きサイクル）
 # =====================================================
-data_collection = ParallelAgent(
-    name="data_collection_parallel",
-    description="3つのリサーチエージェントが同時並行でデータを収集する",
-    sub_agents=[
-        web_researcher,
-        tech_researcher,
-        financial_researcher,
-    ],
-)
 
-# =====================================================
-# レポート改善ループ
-# =====================================================
-report_refinement = LoopAgent(
-    name="report_refinement_loop",
-    description="品質スコア 85 以上になるまでレポートを改善するループ",
-    sub_agents=[
-        report_writer,   # レポートを生成
-        report_critic,   # レポートを評価
-    ],
-    max_iterations=3,
-)
-
-# =====================================================
-# メインパイプライン（Sequential）
-# =====================================================
-main_pipeline = SequentialAgent(
-    name="enterprise_research_pipeline",
-    description="データ収集 → 分析 → レポート生成の順次パイプライン",
-    sub_agents=[
-        data_collection,     # Step 1: 並列データ収集
-        analysis_agent,      # Step 2: 統合分析
-        report_refinement,   # Step 3: レポート生成 & 品質改善ループ
-    ],
-)
-
-# =====================================================
-# ルートエージェント（Coordinator）
-# =====================================================
-root_agent = LlmAgent(
+coordinator = LlmAgent(
     name="enterprise_research_coordinator",
     model=settings.default_model,
-    description="エンタープライズリサーチのコーディネーター。全パターンを統合した最終形態。",
-    instruction="""
+    description="エンタープライズリサーチのコーディネーター。",
+    instruction="""\
 あなたは企業分析プロジェクトのディレクターです。
 
-ユーザーからの分析依頼を受け取り、enterprise_research_pipeline に
-処理を委譲してください。
-
-ユーザーのリクエストから分析対象企業を特定して、
-パイプラインに適切な形で伝えてください。
-
-分析完了後は、レポートの概要をユーザーに伝えてください。
+ユーザーからの分析依頼を受け取り、分析対象企業を特定してください。
+ユーザーのリクエストを明確化し、企業名と分析の観点を整理して出力してください。
 """,
-    sub_agents=[main_pipeline],
+    output_key="coordinator_output",
+)
+
+root_agent = Workflow(
+    name="enterprise_research_workflow",
+    description="全デザインパターン統合: Coordinator + Parallel + Sequential + Loop + Review",
+    edges=[
+        (
+            "START",
+            coordinator,
+            (web_researcher, tech_researcher, financial_researcher),
+            analysis_agent,
+            report_writer,
+            report_critic,
+            {"NEEDS_IMPROVEMENT": report_writer},
+        ),
+    ],
 )
