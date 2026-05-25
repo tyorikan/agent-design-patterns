@@ -1,0 +1,34 @@
+services:
+  # ADK Web UI（全エージェントを対話的にテスト）
+  adk-web:
+    build: .
+    container_name: agent-design-patterns
+    environment:
+      # Vertex AI 認証（ADC のみ・API Key 不使用）
+      - GOOGLE_GENAI_USE_VERTEXAI=True
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      # アプリ設定
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.5-flash}
+      - PYTHONPATH=/app
+    volumes:
+      # ADC クレデンシャルをマウント（ローカル開発用）
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+    ports:
+      - "8080:8080"
+    command: uv run adk web --host 0.0.0.0 --port 8080
+
+  # 個別パターン実行用（docker compose run runner 01_single_agent）
+  runner:
+    build: .
+    environment:
+      - GOOGLE_GENAI_USE_VERTEXAI=True
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.5-flash}
+      - PYTHONPATH=/app
+    volumes:
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+      - .:/app
+    profiles:
+      - tools
