@@ -3,12 +3,19 @@
 ## 概念
 
 **Sequential Pattern** は、複数のエージェントを **固定した順序で** 順次実行するパターン。
-前のエージェントの出力が次のエージェントへ `output_key` を通じて渡される。
+`Workflow` のチェーンタプル構文で、エージェントを直列に並べるだけでパイプラインを構築できる。
 
 ```
 Input → [Agent A] → [Agent B] → [Agent C] → Output
-         output_key  {key_a}      {key_b}
-           ="key_a"
+```
+
+```python
+from google.adk.workflow import Workflow
+
+pipeline = Workflow(
+    name='sequential_pipeline',
+    edges=[('START', agent_a, agent_b, agent_c)]
+)
 ```
 
 ## Single Agent との違い
@@ -66,7 +73,7 @@ pytest tests/integration/test_patterns.py::TestSequential -v
 
 ## 学習ポイント
 
-1. `SequentialAgent` の `sub_agents` リスト
+1. `Workflow` のチェーンタプル構文（`edges=[('START', a, b, c)]`）
 2. `output_key` でエージェント間のデータを受け渡す方法
 3. instruction 内の `{key}` プレースホルダーでセッション状態を参照する方法
 4. 決定論的なフロー（LLM オーケストレーション不要）のメリット

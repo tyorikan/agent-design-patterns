@@ -59,7 +59,10 @@ Vertex AI のプロモーションコンテンツを生成し、コンプライ�
 ## アーキテクチャ
 
 ```
-demo.py が 3 つのエージェントを段階的に実行
+Workflow: content_approval_workflow
+edges=[('START', content_creator, compliance_checker,
+        final_publisher)]
+※ final_publisher の before_agent_callback で人間レビューを実行
 
 Step 1: コンテンツ生成
 ┌───────────────────────────────────────────────┐
@@ -79,16 +82,16 @@ Step 2: コンプライアンスチェック
 │  output_key: compliance_result                │
 └───────────────────────────┬───────────────────┘
                             ▼
-Step 3: 🧑 Human Review
+Step 3: 🧑 Human Review (before_agent_callback)
 ┌───────────────────────────────────────────────┐
-│  demo.py: Confirm.ask("承認しますか？")        │
-│  → コンソール入力で人間が承認/否認            │
-│  結果を human_review としてセッション状態に保存│
+│  final_publisher の before_agent_callback      │
+│  → コンソールで人間が承認/否認                │
+│  否認 → skip_agent() でワークフロー終了       │
 └────────────┬──────────────────┬────────────────┘
              │                  │
           ✅ 承認            ❌ 否認
              ▼                  ▼
-Step 4: 最終公開           ワークフロー終了
+Step 4: 最終公開           skip_agent() で終了
 ┌──────────────────────┐
 │  LlmAgent:           │
 │  final_publisher     │
@@ -97,24 +100,29 @@ Step 4: 最終公開           ワークフロー終了
 └──────────────────────┘
 ```
 
-### 実装のポイント: 段階実行パターン
+### 実装のポイント: Workflow チェーンタプル + before_agent_callback
 
 ```python
-# demo.py での段階実行 — SequentialAgent ではなく手動で制御
-# 人間の入力をセッション状態に追加してから次のエージェントを実行
+from google.adk.workflow import Workflow
 
-# Step 1: content_creator を実行
-content = await run_step(content_creator, ...)
+# before_agent_callback で人間レビューを挿入
+async def human_review_callback(callback_context):
+    """final_publisher 実行前に人間の承認を求める"""
+    approved = Confirm.ask("承認しますか？")
+    if not approved:
+        callback_context.state["human_review"] = "rejected"
+        callback_context.skip_agent()  # エージェントをスキップ
+        return
+    callback_context.state["human_review"] = "approved"
 
-# Step 2: compliance_checker を実行
-compliance = await run_step(compliance_checker, ...)
+final_publisher.before_agent_callback = human_review_callback
 
-# Step 3: 人間の承認（コンソール入力）
-approved = Confirm.ask("承認しますか？")
-
-# Step 4: 承認された場合のみ final_publisher を実行
-if approved:
-    final = await run_step(final_publisher, ...)
+# Workflow のチェーンタプルで順次実行を定義
+workflow = Workflow(
+    name="content_approval_workflow",
+    edges=[('START', content_creator, compliance_checker,
+            final_publisher)],
+)
 ```
 
 ## トレードオフ
@@ -123,7 +131,7 @@ if approved:
 |---|---|
 | コスト | 🟡 中（3 エージェントの LLM 呼び出し） |
 | レイテンシ | 🔴 最高（人間の応答待ち時間が支配的） |
-| 複雑性 | 🟡 中（段階実行の制御フローが必要） |
+| 複雑性 | 🟡 中（Workflow チェーンタプル + callback） |
 | リスク管理 | 🟢 最高（人間がゲートキーパー） |
 | スケーラビリティ | 🔴 低（人間がボトルネック） |
 | 信頼性 | 🟢 高（AI + 人間のダブルチェック） |
@@ -137,8 +145,8 @@ PYTHONPATH=../.. python3 demo.py
 
 ## 学習ポイント
 
-1. **段階実行パターン** — SequentialAgent を使わず、`demo.py` が各エージェントを手動で順番に実行し、間に人間の入力を挟む設計
-2. **セッション状態を介したデータ受け渡し** — `output_key` で各ステップの結果をセッション状態に保存し、次のエージェントの `{変数名}` で参照
-3. **コンプライアンスチェックの自動化と人間レビューの分離** — AI が定型的なリスク評価を自動化し、人間は AI のレポートを見て最終判断に集中する役割分担
-4. **ADK での Human-in-the-Loop 実装** — `ToolContext.actions.escalate` による一時停止や、コンソール入力による手動承認など、複数の実装アプローチがある
+1. **Workflow チェーンタプル** — `Workflow(edges=[('START', a, b, c)])` で順次実行を宣言的に定義。v1 の手動段階実行が不要になった
+2. **`before_agent_callback` による人間レビュー** — `final_publisher` の実行前に callback で人間の承認を挟み、否認なら `skip_agent()` でスキップする設計
+3. **セッション状態を介したデータ受け渡し** — `output_key` で各ステップの結果をセッション状態に保存し、次のエージェントの `{変数名}` で参照
+4. **コンプライアンスチェックの自動化と人間レビューの分離** — AI が定型的なリスク評価を自動化し、人間は AI のレポートを見て最終判断に集中する役割分担
 5. **完全自動化 vs 人間監視のトレードオフ** — スケーラビリティは下がるが、高リスクなタスクではコンプライアンスと信頼性を担保できる

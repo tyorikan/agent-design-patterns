@@ -199,6 +199,65 @@ def log_tool_response_callback(tool, args, context, response):
     return None  # 元のレスポンスを使用
 ```
 
+## ADK v2: Workflow のテスト
+
+> **重要**: ADK v2 では `Workflow` は `BaseAgent` ではなく `BaseNode` のサブクラス。
+> `Runner` には直接渡せるが、`sub_agents` には入れられない。
+> また `LoopAgent` は廃止され、`Workflow` の条件付きサイクル（`dict` による条件付きエッジ）に置き換わった。
+
+```python
+# tests/test_workflow.py
+import pytest
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.adk.workflow import Workflow
+from google.genai import types
+
+
+@pytest.fixture
+async def workflow_runner():
+    """Workflow 用テスト Runner"""
+    session_service = InMemorySessionService()
+    await session_service.create_session(
+        app_name="test_app",
+        user_id="test_user",
+        session_id="test_session",
+    )
+
+    # 条件付きサイクル（旧 LoopAgent 相当）のテスト
+    workflow = Workflow(
+        name="review_loop",
+        edges=[
+            ("START", drafter, reviewer, {"REVISE": drafter}),
+        ],
+    )
+
+    return Runner(
+        agent=workflow,
+        app_name="test_app",
+        session_service=session_service,
+    )
+
+
+@pytest.mark.asyncio
+async def test_workflow_completes(workflow_runner):
+    """Workflow が最終的に完了することを確認"""
+    response_text = ""
+    async for event in workflow_runner.run_async(
+        user_id="test_user",
+        session_id="test_session",
+        new_message=types.Content(
+            role="user",
+            parts=[types.Part(text="レポートを作成してください")],
+        ),
+    ):
+        if event.is_final_response():
+            response_text = event.content.parts[0].text
+    assert response_text != ""
+```
+
+---
+
 ## pytest.ini / pyproject.toml 設定
 
 ```toml

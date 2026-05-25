@@ -62,37 +62,38 @@ Hierarchical（Lv.9）のような上下関係ではなく、**ボトムアッ�
 User: "クラウドネイティブな在庫管理 SaaS を設計してください"
   │
   ▼
-┌───────────────────────────────────────────────────────┐
-│  SequentialAgent: product_design_swarm                 │
-│                                                       │
-│  ┌─────────────────────────────────────────────────┐  │
-│  │  LoopAgent: debate_loop (max_iterations=3)      │  │
-│  │                                                 │  │
-│  │  Round N:                                       │  │
-│  │  ┌──────────────────────────────────────┐       │  │
-│  │  │ ① market_expert                     │       │  │
-│  │  │   → 顧客・市場分析、Go-to-Market    │       │  │
-│  │  │   output_key: market_proposal        │       │  │
-│  │  ├──────────────────────────────────────┤       │  │
-│  │  │ ② engineer_expert                   │       │  │
-│  │  │   → 技術的実現可能性・アーキテクチャ│       │  │
-│  │  │   ※ {market_proposal} を参照        │       │  │
-│  │  │   output_key: engineer_proposal      │       │  │
-│  │  ├──────────────────────────────────────┤       │  │
-│  │  │ ③ finance_expert                    │       │  │
-│  │  │   → ROI・コスト・フェーズ計画       │       │  │
-│  │  │   ※ {market_proposal} +             │       │  │
-│  │  │     {engineer_proposal} を参照       │       │  │
-│  │  │   output_key: finance_proposal       │       │  │
-│  │  │   合意度 >= 70% → [SWARM_CONSENSUS] │       │  │
-│  │  ├──────────────────────────────────────┤       │  │
-│  │  │ ④ consensus_builder                 │       │  │
-│  │  │   → 議論を統合・製品設計提案書      │       │  │
-│  │  │   output_key: market_proposal ← 上書 │       │  │
-│  │  │   次ラウンドのフィードバックになる   │       │  │
-│  │  └──────────────────────────────────────┘       │  │
-│  └─────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  Workflow: product_design_swarm (条件付きサイクル)         │
+│                                                           │
+│  edges=[('START', market_expert, engineer_expert,         │
+│          finance_expert, consensus_builder,               │
+│          {'NEXT_ROUND': market_expert})]                  │
+│                                                           │
+│  Round N:                                                 │
+│  ┌──────────────────────────────────────┐                 │
+│  │ ① market_expert                     │                 │
+│  │   → 顧客・市場分析、Go-to-Market    │                 │
+│  │   output_key: market_proposal        │                 │
+│  ├──────────────────────────────────────┤                 │
+│  │ ② engineer_expert                   │                 │
+│  │   → 技術的実現可能性・アーキテクチャ│                 │
+│  │   ※ {market_proposal} を参照        │                 │
+│  │   output_key: engineer_proposal      │                 │
+│  ├──────────────────────────────────────┤                 │
+│  │ ③ finance_expert                    │                 │
+│  │   → ROI・コスト・フェーズ計画       │                 │
+│  │   ※ {market_proposal} +             │                 │
+│  │     {engineer_proposal} を参照       │                 │
+│  │   output_key: finance_proposal       │                 │
+│  ├──────────────────────────────────────┤                 │
+│  │ ④ consensus_builder                 │                 │
+│  │   → 議論を統合・製品設計提案書      │                 │
+│  │   output_key: market_proposal ← 上書 │                 │
+│  │   合意度 >= 70% → END               │                 │
+│  │   合意度 <  70% → 'NEXT_ROUND'      │                 │
+│  │   次ラウンドのフィードバックになる   │                 │
+│  └──────────────────────────────────────┘                 │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ### 循環フィードバックの仕組み
@@ -125,8 +126,8 @@ PYTHONPATH=../.. python3 demo.py
 ## 学習ポイント
 
 1. **`output_key` の上書きによる循環フィードバック** — `consensus_builder` が `market_proposal` を上書きすることで、次ラウンドの議論に前ラウンドの合意内容を反映させる
-2. **`SequentialAgent` + `LoopAgent` の組み合わせ** — SequentialAgent でラッピングすることで、LoopAgent の前後に処理を追加できる構造
-3. **`[SWARM_CONSENSUS]` による合意判定** — `finance_expert` がコンセンサスレベルを評価し、70% 以上でキーワードを出力してループを制御
+2. **`Workflow` 1 つで Sequential + Loop を統合** — v2 では `Workflow` のチェーンタプル＋条件付きサイクル（dict エッジ `{'NEXT_ROUND': market_expert}`）で、v1 の `SequentialAgent` + `LoopAgent` を 1 つの Workflow に統合
+3. **条件付きエッジによる合意判定** — `consensus_builder` がコンセンサスレベルを評価し、70% 以上なら END、未達なら `'NEXT_ROUND'` を返してサイクル再入
 4. **対等なエージェント間の議論設計** — 各専門家が前の専門家の `output_key` を `{変数名}` で参照し、「反論・補完・合意」の議論構造を形成
 5. **ADK の `{変数名}` の初回制約** — `market_expert` はループの最初に実行されるため `{変数名}` を使わず、ユーザーメッセージから直接読み取る設計
 

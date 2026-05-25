@@ -2,7 +2,7 @@
 name: adk-python
 description: |
   Google Agent Development Kit (ADK) Python を使ったエージェント実装のスキル。
-  LlmAgent、SequentialAgent、ParallelAgent、LoopAgent などのエージェントタイプ、
+  LlmAgent と Workflow（Sequential / Parallel / Loop）によるオーケストレーション、
   ツール定義、セッション管理、Runner の使い方まで網羅する。
   AI エージェントのデザインパターン実装を担当するエージェントは必ずこのスキルを参照すること。
 ---
@@ -14,7 +14,7 @@ description: |
 **ADK (Agent Development Kit)** は Google が提供するオープンソースの Python フレームワーク。
 Gemini モデルを使ったエージェントの定義・オーケストレーション・デプロイを体系化する。
 
-- **バージョン**: ADK Python 2.0 GA (2026 年現在最新)
+- **バージョン**: ADK Python 2.1+ (2026 年現在最新)
 - **PyPI**: `google-adk`
 - **GitHub**: https://github.com/google/adk-python
 - **公式ドキュメント**: https://adk.dev / https://google.github.io/adk-docs/
@@ -92,12 +92,13 @@ root_agent = LlmAgent(
 
 ---
 
-### 2. SequentialAgent（順次実行）
+### 2. Workflow — Sequential（順次実行）
 
-複数のサブエージェントを順番に実行する。前のエージェントの出力が次のエージェントの入力になる。
+複数のエージェントをチェーンタプルで順番に実行する。前のエージェントの出力が次のエージェントの入力になる。
 
 ```python
-from google.adk.agents import SequentialAgent, LlmAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 # 各エージェントは output_key でセッション状態に結果を保存
 step1 = LlmAgent(
@@ -123,10 +124,10 @@ step3 = LlmAgent(
     instruction="クリーニング済みデータ: {clean_data} を適切な形式で保存してください。",
 )
 
-pipeline = SequentialAgent(
+# チェーンタプル: START → step1 → step2 → step3
+pipeline = Workflow(
     name="ETLPipeline",
-    description="データ抽出・クリーニング・ロードのパイプライン",
-    sub_agents=[step1, step2, step3]
+    edges=[('START', step1, step2, step3)]
 )
 ```
 
@@ -134,15 +135,17 @@ pipeline = SequentialAgent(
 - LLM によるオーケストレーション不要（低コスト・低レイテンシ）
 - 固定された線形フロー
 - `output_key` と instruction の `{key}` でデータ受け渡し
+- Workflow は `BaseNode` のサブクラス（`sub_agents` には入れられない）
 
 ---
 
-### 3. ParallelAgent（並列実行）
+### 3. Workflow — Parallel（並列実行）
 
-複数のサブエージェントを同時並行で実行する。
+複数のエージェントをネストタプルで fan-out / fan-in する。
 
 ```python
-from google.adk.agents import ParallelAgent, LlmAgent, SequentialAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 # 独立した調査エージェント群（並列実行）
 market_agent = LlmAgent(
@@ -178,32 +181,30 @@ synthesizer = LlmAgent(
     """,
 )
 
-# 並列実行 → 集約のパイプライン
-research_system = SequentialAgent(
+# ネストタプルで fan-out → fan-in
+research_system = Workflow(
     name="ResearchSystem",
-    sub_agents=[
-        ParallelAgent(
-            name="ParallelResearcher",
-            sub_agents=[market_agent, competitor_agent, customer_agent]
-        ),
-        synthesizer
+    edges=[
+        ('START', (market_agent, competitor_agent, customer_agent), synthesizer)
     ]
 )
 ```
 
 **特徴:**
 - 独立したタスクを同時実行でレイテンシ削減
-- 各サブエージェントは異なる `output_key` を使う必要がある
-- gather（集約）ステップには SequentialAgent を組み合わせる
+- 各エージェントは異なる `output_key` を使う必要がある
+- ネストタプル `(a, b, c)` で並列実行、次のノードが集約ステップになる
 
 ---
 
-### 4. LoopAgent（ループ実行）
+### 4. Workflow — Loop（条件付きサイクル）
 
-終了条件を満たすまで、サブエージェントのシーケンスを繰り返す。
+条件付きエッジ（`dict`）を使い、条件を満たすまでサイクルする。
+v2 では **無条件サイクルは禁止** — 必ず `dict` による条件付きエッジが必要。
 
 ```python
-from google.adk.agents import LoopAgent, LlmAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 writer = LlmAgent(
     name="Writer",
@@ -224,31 +225,36 @@ critic = LlmAgent(
     instruction="""
     以下のドラフトを評価してください: {draft}
     
-    改善点を指摘してください。品質が十分な場合は "[APPROVED]" と記載してください。
+    改善点がある場合は "REVISE" を、品質が十分な場合は "APPROVED" と記載してください。
     """,
     output_key="feedback"
 )
 
-# max_iterations で無限ループを防止（必須！）
-refinement_loop = LoopAgent(
+# 条件付きサイクル: critic の結果が "REVISE" なら writer に戻る
+refinement_loop = Workflow(
     name="WriterRoom",
-    description="ドラフト生成と批評のループ",
-    sub_agents=[writer, critic],
-    max_iterations=5                   # 最大反復回数（必ず設定）
+    edges=[
+        ('START', writer, critic, {'REVISE': writer})  # 条件付きエッジ
+    ]
 )
 ```
 
-**⚠️ 重要: 終了条件の設計**
-```python
-# カスタム終了条件を使うパターン
-from google.adk.agents.callback_context import CallbackContext
+**⚠️ 重要: 条件付きエッジの設計**
+- `dict` のキーはエージェントの出力テキストに含まれるキーワード
+- キーワードにマッチしない場合はサイクルを終了（次のエッジまたは END へ進む）
+- 無条件サイクル（`dict` なし）は v2 では禁止
 
-def check_approval_callback(callback_context: CallbackContext):
-    """[APPROVED] が含まれたら早期終了"""
-    state = callback_context.state
-    feedback = state.get("feedback", "")
-    if "[APPROVED]" in feedback:
-        callback_context.actions.escalate = True  # ループを終了
+```python
+# 複数条件を持つパターン
+workflow = Workflow(
+    name="MultiConditionLoop",
+    edges=[
+        ('START', processor, validator, {
+            'RETRY': processor,   # バリデーション失敗 → 再処理
+            'ESCALATE': escalation_agent  # エスカレーション
+        })  # どちらにもマッチしない → 正常終了
+    ]
+)
 ```
 
 ---
@@ -533,34 +539,38 @@ adk deploy agent_engine \
 ### DO ✅
 1. **単一責任**: 各エージェントは1つの役割のみ持つ
 2. **型アノテーション**: ツール関数には必ず型ヒントとdocstringを書く
-3. **max_iterations**: LoopAgent には必ず設定する
-4. **output_key**: SequentialAgent/ParallelAgent でのデータ受け渡しに使う
+3. **条件付きエッジ**: Workflow の Loop には必ず `dict` による条件付きエッジを使う
+4. **output_key**: Workflow でのデータ受け渡しに使う
 5. **@lru_cache**: 設定オブジェクトとクライアント初期化に使う
 6. **非同期**: `run_async` を使い、同期版は避ける
 7. **description**: サブエージェントには必ず説明を書く（LLM のルーティングに使われる）
 
 ### DON'T ❌
 1. **モノリシックプロンプト**: 1つのエージェントに多くの責務を持たせない
-2. **無限ループ**: LoopAgent に max_iterations を忘れない
-3. **状態共有の競合**: ParallelAgent で同じ output_key を使わない
+2. **無条件サイクル**: Workflow の Loop で `dict` を省略しない（v2 では禁止）
+3. **状態共有の競合**: Parallel Workflow で同じ output_key を使わない
 4. **本番での InMemorySessionService**: スケール時に状態が失われる
+5. **sub_agents に Workflow を入れない**: Workflow は `BaseNode` であり `BaseAgent` ではない
 
 ---
 
 ## よくあるパターン別クイックリファレンス
 
 ```python
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
+
 # パターン1: Single Agent
 agent = LlmAgent(name="Agent", model="gemini-2.0-flash", instruction="...", tools=[...])
 
-# パターン2: Sequential (A → B → C)
-SequentialAgent(name="Pipeline", sub_agents=[a, b, c])
+# パターン2: Sequential (A → B → C)  ※チェーンタプル
+Workflow(name="Pipeline", edges=[('START', a, b, c)])
 
-# パターン3: Parallel (A || B || C) → D
-SequentialAgent(sub_agents=[ParallelAgent(sub_agents=[a, b, c]), d])
+# パターン3: Parallel (A || B || C) → D  ※ネストタプル fan-out/fan-in
+Workflow(name="FanOutIn", edges=[('START', (a, b, c), d)])
 
-# パターン4: Loop (A → B まで繰り返し)
-LoopAgent(sub_agents=[a, b], max_iterations=5)
+# パターン4: Loop (A → B → 条件付きサイクル)  ※dict による条件付きエッジ
+Workflow(name="Loop", edges=[('START', a, b, {'REVISE': a})])
 
 # パターン5: Coordinator (LLM がルーティング)
 LlmAgent(instruction="...", sub_agents=[specialist_a, specialist_b])

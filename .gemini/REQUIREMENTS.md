@@ -56,7 +56,7 @@ Google Cloud のアーキテクチャガイドに基づき、AI エージェン�
 ## 技術要件
 
 - Python 3.12+
-- Google ADK Python 1.19+
+- Google ADK Python 2.1+（Workflow API 使用）
 - Vertex AI Gemini 3.5 Flash（デフォルト）
 - パッケージ管理: pip (pyproject.toml) + uv (Docker)
 - テスト: pytest + pytest-asyncio（2層テストピラミッド）
