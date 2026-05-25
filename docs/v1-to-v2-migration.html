@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google ADK v1 → v2 Migration Guide | Workflow Evolution</title>
+<meta name="description" content="Google ADK Python の v1 から v2 への移行ガイド。SequentialAgent/ParallelAgent/LoopAgent から Workflow API への進化を可視化。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== CSS Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #111827;
+  --bg-card: #1a1f35;
+  --bg-card-hover: #1e2540;
+  --bg-glass: rgba(30, 41, 59, 0.6);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-cyan: #22d3ee;
+  --accent-blue: #3b82f6;
+  --accent-purple: #a855f7;
+  --accent-pink: #ec4899;
+  --accent-amber: #f59e0b;
+  --accent-emerald: #10b981;
+  --accent-red: #ef4444;
+  --gradient-hero: linear-gradient(135deg, #0a0e1a 0%, #1a1040 50%, #0a1628 100%);
+  --gradient-cyan: linear-gradient(135deg, #22d3ee, #3b82f6);
+  --gradient-amber: linear-gradient(135deg, #f59e0b, #ef4444);
+  --gradient-emerald: linear-gradient(135deg, #10b981, #22d3ee);
+  --gradient-purple: linear-gradient(135deg, #a855f7, #ec4899);
+  --border-color: rgba(148, 163, 184, 0.1);
+  --radius: 16px;
+  --radius-sm: 8px;
+  --shadow-glow-cyan: 0 0 30px rgba(34, 211, 238, 0.15);
+  --shadow-glow-amber: 0 0 30px rgba(245, 158, 11, 0.15);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* ===== Typography ===== */
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.3; }
+h1 { font-size: clamp(2.5rem, 5vw, 4rem); letter-spacing: -0.03em; }
+h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); letter-spacing: -0.02em; }
+h3 { font-size: 1.25rem; }
+code, .code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875em;
+}
+
+/* ===== Layout ===== */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+section { padding: 100px 0; position: relative; }
+
+/* ===== Navigation ===== */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: rgba(10, 14, 26, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-color);
+  padding: 16px 0;
+}
+nav .container { display: flex; align-items: center; justify-content: space-between; }
+nav .logo { font-weight: 800; font-size: 1.1rem; background: var(--gradient-cyan); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+nav .nav-links { display: flex; gap: 28px; list-style: none; }
+nav .nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: color 0.3s; }
+nav .nav-links a:hover { color: var(--accent-cyan); }
+
+/* ===== Hero ===== */
+.hero {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--gradient-hero);
+  position: relative; text-align: center; padding-top: 80px;
+}
+.hero::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(34, 211, 238, 0.06) 0%, transparent 70%),
+              radial-gradient(ellipse 40% 40% at 30% 70%, rgba(168, 85, 247, 0.04) 0%, transparent 60%);
+}
+.hero-content { position: relative; z-index: 1; }
+.hero .badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(34, 211, 238, 0.1); border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 100px; padding: 6px 20px; font-size: 0.85rem; color: var(--accent-cyan);
+  margin-bottom: 24px; font-weight: 500;
+}
+.hero .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald); animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.hero h1 { margin-bottom: 20px; }
+.hero h1 .gradient-text { background: var(--gradient-cyan); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero .subtitle { font-size: 1.2rem; color: var(--text-secondary); max-width: 640px; margin: 0 auto 48px; }
+.hero-image { max-width: 720px; margin: 0 auto; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-glow-cyan); }
+.hero-image img { width: 100%; display: block; }
+
+/* ===== Stats Bar ===== */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px;
+  background: var(--border-color); border-radius: var(--radius); overflow: hidden;
+  margin-top: -50px; position: relative; z-index: 2;
+}
+.stat-item {
+  background: var(--bg-card); padding: 28px 24px; text-align: center;
+}
+.stat-item .stat-number {
+  font-size: 2rem; font-weight: 800;
+  background: var(--gradient-cyan); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.stat-item .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+
+/* ===== Section Headers ===== */
+.section-header { text-align: center; margin-bottom: 64px; }
+.section-header .overline {
+  font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em;
+  color: var(--accent-cyan); margin-bottom: 12px;
+}
+.section-header p { color: var(--text-secondary); max-width: 600px; margin: 12px auto 0; }
+
+/* ===== Key Changes Cards ===== */
+.changes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.change-card {
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius);
+  padding: 32px; position: relative; overflow: hidden; transition: transform 0.3s, box-shadow 0.3s;
+}
+.change-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-glow-cyan); }
+.change-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+}
+.change-card:nth-child(1)::before { background: var(--gradient-cyan); }
+.change-card:nth-child(2)::before { background: var(--gradient-purple); }
+.change-card:nth-child(3)::before { background: var(--gradient-emerald); }
+.change-card .card-icon {
+  width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem; margin-bottom: 20px;
+}
+.change-card:nth-child(1) .card-icon { background: rgba(34, 211, 238, 0.1); }
+.change-card:nth-child(2) .card-icon { background: rgba(168, 85, 247, 0.1); }
+.change-card:nth-child(3) .card-icon { background: rgba(16, 185, 129, 0.1); }
+.change-card h3 { margin-bottom: 12px; }
+.change-card p { color: var(--text-secondary); font-size: 0.95rem; }
+
+/* ===== Syntax Comparison ===== */
+.syntax-section { background: var(--bg-secondary); }
+.syntax-grid { display: grid; grid-template-columns: 1fr; gap: 48px; }
+.syntax-item { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
+.syntax-item .syntax-label {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 16px; margin-bottom: 8px;
+}
+.syntax-item .syntax-label .pattern-badge {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px;
+  border-radius: 100px; font-size: 0.8rem; font-weight: 600;
+}
+.syntax-item .syntax-label h3 { font-size: 1.3rem; }
+.code-panel {
+  border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-color);
+}
+.code-panel .panel-header {
+  padding: 12px 20px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
+  display: flex; align-items: center; gap: 8px;
+}
+.code-panel.v1 .panel-header { background: rgba(245, 158, 11, 0.1); color: var(--accent-amber); }
+.code-panel.v2 .panel-header { background: rgba(34, 211, 238, 0.1); color: var(--accent-cyan); }
+.code-panel pre {
+  padding: 20px; margin: 0; background: var(--bg-primary); overflow-x: auto; font-size: 0.82rem; line-height: 1.8;
+}
+.code-panel code { color: var(--text-secondary); }
+.code-panel .kw { color: var(--accent-purple); }
+.code-panel .fn { color: var(--accent-cyan); }
+.code-panel .str { color: var(--accent-emerald); }
+.code-panel .cm { color: var(--text-muted); }
+.code-panel .op { color: var(--accent-pink); }
+.code-panel .dep { color: var(--accent-amber); text-decoration: line-through; opacity: 0.7; }
+.code-panel .new { color: var(--accent-cyan); font-weight: 600; }
+
+/* ===== Pattern Evolution ===== */
+.pattern-grid { display: grid; gap: 32px; }
+.pattern-card {
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius);
+  overflow: hidden; transition: transform 0.3s; position: relative;
+}
+.pattern-card:hover { transform: translateY(-2px); }
+.pattern-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 28px; border-bottom: 1px solid var(--border-color); cursor: pointer;
+}
+.pattern-card-header .left { display: flex; align-items: center; gap: 16px; }
+.pattern-level {
+  width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.85rem; flex-shrink: 0;
+}
+.pattern-card-header .meta { display: flex; flex-direction: column; }
+.pattern-card-header .meta .name { font-weight: 600; font-size: 1.05rem; }
+.pattern-card-header .meta .usecase { font-size: 0.8rem; color: var(--text-muted); }
+.pattern-card-header .change-badge {
+  padding: 4px 14px; border-radius: 100px; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;
+}
+.badge-workflow { background: rgba(34, 211, 238, 0.1); color: var(--accent-cyan); border: 1px solid rgba(34, 211, 238, 0.2); }
+.badge-unchanged { background: rgba(100, 116, 139, 0.1); color: var(--text-muted); border: 1px solid rgba(100, 116, 139, 0.2); }
+
+.pattern-card-body { padding: 0 28px 28px; display: none; }
+.pattern-card.open .pattern-card-body { display: block; }
+.pattern-card-header .toggle-icon { transition: transform 0.3s; color: var(--text-muted); font-size: 1.2rem; }
+.pattern-card.open .toggle-icon { transform: rotate(180deg); }
+
+/* ===== Diagram Sections ===== */
+.diagram-wrapper {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px;
+}
+.diagram-box {
+  border-radius: var(--radius-sm); padding: 24px; position: relative;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+}
+.diagram-box.v1 { background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.15); }
+.diagram-box.v2 { background: rgba(34, 211, 238, 0.05); border: 1px solid rgba(34, 211, 238, 0.15); }
+.diagram-box .diagram-title {
+  font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 16px;
+}
+.diagram-box.v1 .diagram-title { color: var(--accent-amber); }
+.diagram-box.v2 .diagram-title { color: var(--accent-cyan); }
+
+/* ===== Sequence Diagrams ===== */
+.sequence-section { background: var(--bg-secondary); }
+.sequence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 32px; }
+.sequence-card {
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius);
+  padding: 32px; position: relative;
+}
+.sequence-card h3 { margin-bottom: 8px; }
+.sequence-card .desc { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 24px; }
+
+/* SVG Sequence Diagrams */
+.seq-diagram { width: 100%; }
+.seq-diagram .lifeline { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 6 4; opacity: 0.4; }
+.seq-diagram .actor-box { fill: var(--bg-card); stroke: var(--accent-cyan); stroke-width: 1.5; rx: 8; }
+.seq-diagram .actor-text { fill: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; text-anchor: middle; }
+.seq-diagram .msg-line { stroke-width: 1.5; }
+.seq-diagram .msg-text { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; fill: var(--text-secondary); }
+.seq-diagram .msg-arrow { fill: none; stroke-width: 1.5; }
+.seq-diagram .activation { rx: 3; opacity: 0.3; }
+
+/* ===== Workflow Image ===== */
+.workflow-image-section { text-align: center; }
+.workflow-image-section img { max-width: 640px; width: 100%; border-radius: var(--radius); box-shadow: var(--shadow-glow-cyan); }
+
+/* ===== Comparison Table ===== */
+.comparison-table-wrapper { overflow-x: auto; }
+.comparison-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-color);
+}
+.comparison-table th {
+  background: var(--bg-card); padding: 16px 20px; font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+.comparison-table td {
+  padding: 14px 20px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+.comparison-table tr:last-child td { border-bottom: none; }
+.comparison-table .v1-cell { color: var(--accent-amber); }
+.comparison-table .v2-cell { color: var(--accent-cyan); }
+.comparison-table .arrow-cell { color: var(--text-muted); text-align: center; font-size: 1.2rem; }
+
+/* ===== Breaking Changes ===== */
+.breaking-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.breaking-card {
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius);
+  padding: 24px; position: relative; overflow: hidden;
+}
+.breaking-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--gradient-amber);
+}
+.breaking-card .icon { font-size: 1.5rem; margin-bottom: 12px; }
+.breaking-card h4 { margin-bottom: 8px; font-size: 0.95rem; }
+.breaking-card p { color: var(--text-secondary); font-size: 0.85rem; }
+.breaking-card .code-snippet {
+  background: var(--bg-primary); border-radius: var(--radius-sm); padding: 12px 16px;
+  margin-top: 12px; font-size: 0.8rem; overflow-x: auto;
+}
+
+/* ===== Timeline ===== */
+.timeline { position: relative; padding-left: 40px; }
+.timeline::before {
+  content: ''; position: absolute; left: 15px; top: 0; bottom: 0; width: 2px;
+  background: linear-gradient(180deg, var(--accent-cyan), var(--accent-purple), var(--accent-emerald));
+}
+.timeline-item { position: relative; margin-bottom: 40px; }
+.timeline-item::before {
+  content: ''; position: absolute; left: -33px; top: 6px; width: 12px; height: 12px;
+  border-radius: 50%; border: 2px solid var(--accent-cyan); background: var(--bg-primary);
+}
+.timeline-item .time { font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600; margin-bottom: 4px; }
+.timeline-item h4 { margin-bottom: 8px; }
+.timeline-item p { color: var(--text-secondary); font-size: 0.9rem; }
+
+/* ===== Footer ===== */
+footer {
+  padding: 48px 0; border-top: 1px solid var(--border-color); text-align: center;
+  color: var(--text-muted); font-size: 0.85rem;
+}
+
+/* ===== Animations ===== */
+.fade-in {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .syntax-item { grid-template-columns: 1fr; }
+  .diagram-wrapper { grid-template-columns: 1fr; }
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  nav .nav-links { display: none; }
+  section { padding: 64px 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+  <div class="container">
+    <div class="logo">ADK Migration Guide</div>
+    <ul class="nav-links">
+      <li><a href="#overview">概要</a></li>
+      <li><a href="#syntax">構文比較</a></li>
+      <li><a href="#patterns">パターン進化</a></li>
+      <li><a href="#sequence">データフロー</a></li>
+      <li><a href="#breaking">破壊的変更</a></li>
+      <li><a href="#timeline">タイムライン</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="top">
+  <div class="hero-content">
+    <div class="badge"><span class="dot"></span> Google ADK Python v2.1.0</div>
+    <h1>Agent → <span class="gradient-text">Workflow</span></h1>
+    <p class="subtitle">
+      SequentialAgent・ParallelAgent・LoopAgent が統一された<br>
+      <strong>Workflow API</strong> への進化を可視化
+    </p>
+    <div class="hero-image">
+      <img src="assets/architecture_evolution.png" alt="Architecture Evolution: Agent-based to Workflow-based">
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<section style="padding-top: 0;">
+  <div class="container">
+    <div class="stats-bar fade-in">
+      <div class="stat-item">
+        <div class="stat-number">12</div>
+        <div class="stat-label">パターン移行</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">50</div>
+        <div class="stat-label">テスト PASS</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">0</div>
+        <div class="stat-label">Deprecated API</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">35+</div>
+        <div class="stat-label">ファイル更新</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Overview -->
+<section id="overview">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">Key Changes</div>
+      <h2>3つのクラスが1つの Workflow に統合</h2>
+      <p>v2 では個別のオーケストレーションクラスが廃止され、宣言的なグラフ構文で全パターンを表現できるようになった</p>
+    </div>
+    <div class="changes-grid">
+      <div class="change-card fade-in">
+        <div class="card-icon">⛓️</div>
+        <h3>チェーンタプル</h3>
+        <p>
+          <code class="code" style="color:var(--accent-amber)">SequentialAgent(sub_agents=[a, b, c])</code><br>
+          ↓<br>
+          <code class="code" style="color:var(--accent-cyan)">Workflow(edges=[("START", a, b, c)])</code>
+        </p>
+        <p style="margin-top: 12px;">ノードをタプルで並べるだけで直列実行を表現。エッジが暗黙的に自動生成される。</p>
+      </div>
+      <div class="change-card fade-in">
+        <div class="card-icon">🔀</div>
+        <h3>ネストタプル</h3>
+        <p>
+          <code class="code" style="color:var(--accent-amber)">ParallelAgent(sub_agents=[a, b, c])</code><br>
+          ↓<br>
+          <code class="code" style="color:var(--accent-cyan)">Workflow(edges=[("START", (a, b, c), agg)])</code>
+        </p>
+        <p style="margin-top: 12px;">タプルをネストすることで fan-out / fan-in パターンを宣言的に表現。</p>
+      </div>
+      <div class="change-card fade-in">
+        <div class="card-icon">🔄</div>
+        <h3>条件付きサイクル</h3>
+        <p>
+          <code class="code" style="color:var(--accent-amber)">LoopAgent(sub_agents=[a, b], max_iterations=5)</code><br>
+          ↓<br>
+          <code class="code" style="color:var(--accent-cyan)">Workflow(edges=[("START", a, b, {"REVISE": a})])</code>
+        </p>
+        <p style="margin-top: 12px;">dict で条件分岐を定義。無条件サイクルは禁止。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Workflow Patterns Image -->
+<section class="workflow-image-section">
+  <div class="container fade-in">
+    <img src="assets/workflow_patterns.png" alt="Three Workflow patterns: Chain, Fan-out/Fan-in, Cycle">
+    <p style="color: var(--text-muted); margin-top: 16px; font-size: 0.9rem;">3 つの Workflow 構文パターン：Chain / Fan-out・Fan-in / Conditional Cycle</p>
+  </div>
+</section>
+
+<!-- Syntax Comparison -->
+<section class="syntax-section" id="syntax">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">Syntax Comparison</div>
+      <h2>コード構文の Before / After</h2>
+      <p>各 Workflow パターンの具体的なコード変更</p>
+    </div>
+
+    <div class="syntax-grid">
+      <!-- Sequential -->
+      <div class="syntax-item fade-in">
+        <div class="syntax-label">
+          <span class="pattern-badge" style="background:rgba(59,130,246,0.15);color:var(--accent-blue);">Lv.3</span>
+          <h3>Sequential — 直列実行</h3>
+        </div>
+        <div class="code-panel v1">
+          <div class="panel-header">● v1 — SequentialAgent</div>
+          <pre><code><span class="kw">from</span> google.adk.agents <span class="kw">import</span> <span class="dep">SequentialAgent</span>
+
+root_agent = <span class="dep">SequentialAgent</span>(
+    name=<span class="str">"etl_pipeline"</span>,
+    sub_agents=[
+        extract_agent,
+        transform_agent,
+        load_agent,
+    ],
+)</code></pre>
+        </div>
+        <div class="code-panel v2">
+          <div class="panel-header">● v2 — Workflow チェーンタプル</div>
+          <pre><code><span class="kw">from</span> google.adk.workflow <span class="kw">import</span> <span class="new">Workflow</span>
+
+root_agent = <span class="new">Workflow</span>(
+    name=<span class="str">"etl_pipeline"</span>,
+    edges=[
+        (<span class="str">"START"</span>, extract, transform, load),
+    ],
+)</code></pre>
+        </div>
+      </div>
+
+      <!-- Parallel -->
+      <div class="syntax-item fade-in">
+        <div class="syntax-label">
+          <span class="pattern-badge" style="background:rgba(168,85,247,0.15);color:var(--accent-purple);">Lv.4</span>
+          <h3>Parallel — 並列実行 (fan-out / fan-in)</h3>
+        </div>
+        <div class="code-panel v1">
+          <div class="panel-header">● v1 — ParallelAgent</div>
+          <pre><code><span class="kw">from</span> google.adk.agents <span class="kw">import</span> <span class="dep">ParallelAgent</span>
+
+root_agent = <span class="dep">ParallelAgent</span>(
+    name=<span class="str">"multi_source"</span>,
+    sub_agents=[
+        web_researcher,
+        tech_researcher,
+        finance_researcher,
+    ],
+)</code></pre>
+        </div>
+        <div class="code-panel v2">
+          <div class="panel-header">● v2 — Workflow ネストタプル</div>
+          <pre><code><span class="kw">from</span> google.adk.workflow <span class="kw">import</span> <span class="new">Workflow</span>
+
+root_agent = <span class="new">Workflow</span>(
+    name=<span class="str">"multi_source"</span>,
+    edges=[
+        (<span class="str">"START"</span>,
+         <span class="op">(</span>web, tech, finance<span class="op">)</span>,  <span class="cm"># fan-out</span>
+         aggregator),             <span class="cm"># fan-in</span>
+    ],
+)</code></pre>
+        </div>
+      </div>
+
+      <!-- Loop -->
+      <div class="syntax-item fade-in">
+        <div class="syntax-label">
+          <span class="pattern-badge" style="background:rgba(16,185,129,0.15);color:var(--accent-emerald);">Lv.5</span>
+          <h3>Loop — 条件付きサイクル</h3>
+        </div>
+        <div class="code-panel v1">
+          <div class="panel-header">● v1 — LoopAgent</div>
+          <pre><code><span class="kw">from</span> google.adk.agents <span class="kw">import</span> <span class="dep">LoopAgent</span>
+
+root_agent = <span class="dep">LoopAgent</span>(
+    name=<span class="str">"code_gen_loop"</span>,
+    sub_agents=[
+        code_generator,
+        code_tester,
+    ],
+    <span class="dep">max_iterations</span>=5,
+)</code></pre>
+        </div>
+        <div class="code-panel v2">
+          <div class="panel-header">● v2 — Workflow 条件付きエッジ</div>
+          <pre><code><span class="kw">from</span> google.adk.workflow <span class="kw">import</span> <span class="new">Workflow</span>
+
+root_agent = <span class="new">Workflow</span>(
+    name=<span class="str">"code_gen_loop"</span>,
+    edges=[
+        (<span class="str">"START"</span>, generator, tester,
+         <span class="op">{</span><span class="str">"FAIL"</span>: generator<span class="op">}</span>),  <span class="cm"># 条件付き</span>
+    ],
+)</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pattern Evolution -->
+<section id="patterns">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">Pattern Evolution</div>
+      <h2>全12パターンの進化マップ</h2>
+      <p>各デザインパターンの v1 → v2 移行内容をクリックして展開</p>
+    </div>
+
+    <div class="pattern-grid" id="patternGrid">
+      <!-- Patterns will be rendered by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- Sequence Diagrams -->
+<section class="sequence-section" id="sequence">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">Data Flow</div>
+      <h2>データフロー シーケンス図</h2>
+      <p>v2 Workflow でのノード間データの流れを可視化</p>
+    </div>
+    <div class="sequence-grid">
+      <!-- Sequential Flow -->
+      <div class="sequence-card fade-in">
+        <h3>チェーン（Sequential）</h3>
+        <p class="desc">ノードが直列に実行され、output_key でデータを受け渡す</p>
+        <svg class="seq-diagram" viewBox="0 0 300 280">
+          <!-- Actors -->
+          <rect class="actor-box" x="10" y="10" width="60" height="30" style="stroke:var(--accent-amber)"/>
+          <text class="actor-text" x="40" y="30">START</text>
+          <rect class="actor-box" x="100" y="10" width="80" height="30"/>
+          <text class="actor-text" x="140" y="30">Extract</text>
+          <rect class="actor-box" x="210" y="10" width="80" height="30"/>
+          <text class="actor-text" x="250" y="30">Transform</text>
+          <!-- Lifelines -->
+          <line class="lifeline" x1="40" y1="40" x2="40" y2="260"/>
+          <line class="lifeline" x1="140" y1="40" x2="140" y2="260"/>
+          <line class="lifeline" x1="250" y1="40" x2="250" y2="260"/>
+          <!-- Activations -->
+          <rect class="activation" x="35" y="55" width="10" height="30" fill="var(--accent-amber)"/>
+          <rect class="activation" x="135" y="65" width="10" height="60" fill="var(--accent-cyan)"/>
+          <rect class="activation" x="245" y="145" width="10" height="60" fill="var(--accent-cyan)"/>
+          <!-- Messages -->
+          <line class="msg-line" x1="45" y1="70" x2="135" y2="70" stroke="var(--accent-cyan)" marker-end="url(#arrowCyan)"/>
+          <text class="msg-text" x="90" y="64">query</text>
+          <line class="msg-line" x1="145" y1="120" x2="245" y2="150" stroke="var(--accent-emerald)" marker-end="url(#arrowEmerald)"/>
+          <text class="msg-text" x="175" y="128" fill="var(--accent-emerald)">{raw_data}</text>
+          <line class="msg-line" x1="245" y1="200" x2="145" y2="230" stroke="var(--accent-purple)" stroke-dasharray="6 3" marker-end="url(#arrowPurple)"/>
+          <text class="msg-text" x="175" y="222" fill="var(--accent-purple)">{result}</text>
+          <!-- Arrow defs -->
+          <defs>
+            <marker id="arrowCyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-cyan)"/></marker>
+            <marker id="arrowEmerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-emerald)"/></marker>
+            <marker id="arrowPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-purple)"/></marker>
+            <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-amber)"/></marker>
+            <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-red)"/></marker>
+          </defs>
+        </svg>
+      </div>
+
+      <!-- Parallel Flow -->
+      <div class="sequence-card fade-in">
+        <h3>ネスト（Parallel）</h3>
+        <p class="desc">fan-out で並列に実行、fan-in で集約</p>
+        <svg class="seq-diagram" viewBox="0 0 300 280">
+          <rect class="actor-box" x="5" y="10" width="50" height="30" style="stroke:var(--accent-amber)"/>
+          <text class="actor-text" x="30" y="30" style="font-size:10px">START</text>
+          <rect class="actor-box" x="70" y="10" width="48" height="30"/>
+          <text class="actor-text" x="94" y="30" style="font-size:10px">Web</text>
+          <rect class="actor-box" x="126" y="10" width="48" height="30"/>
+          <text class="actor-text" x="150" y="30" style="font-size:10px">Tech</text>
+          <rect class="actor-box" x="182" y="10" width="48" height="30"/>
+          <text class="actor-text" x="206" y="30" style="font-size:10px">Fin</text>
+          <rect class="actor-box" x="240" y="10" width="54" height="30"/>
+          <text class="actor-text" x="267" y="30" style="font-size:10px">Agg</text>
+          <line class="lifeline" x1="30" y1="40" x2="30" y2="260"/>
+          <line class="lifeline" x1="94" y1="40" x2="94" y2="260"/>
+          <line class="lifeline" x1="150" y1="40" x2="150" y2="260"/>
+          <line class="lifeline" x1="206" y1="40" x2="206" y2="260"/>
+          <line class="lifeline" x1="267" y1="40" x2="267" y2="260"/>
+          <!-- Fan-out -->
+          <rect x="22" y="56" width="16" height="16" rx="3" fill="var(--accent-purple)" opacity="0.4"/>
+          <line class="msg-line" x1="38" y1="65" x2="89" y2="75" stroke="var(--accent-purple)" marker-end="url(#arrowPurple)"/>
+          <line class="msg-line" x1="38" y1="65" x2="145" y2="75" stroke="var(--accent-purple)" marker-end="url(#arrowPurple)"/>
+          <line class="msg-line" x1="38" y1="65" x2="201" y2="75" stroke="var(--accent-purple)" marker-end="url(#arrowPurple)"/>
+          <text class="msg-text" x="78" y="58" fill="var(--accent-purple)">fan-out</text>
+          <!-- Activations parallel -->
+          <rect class="activation" x="89" y="75" width="10" height="70" fill="var(--accent-cyan)"/>
+          <rect class="activation" x="145" y="75" width="10" height="70" fill="var(--accent-cyan)"/>
+          <rect class="activation" x="201" y="75" width="10" height="70" fill="var(--accent-cyan)"/>
+          <!-- Fan-in -->
+          <line class="msg-line" x1="99" y1="155" x2="262" y2="185" stroke="var(--accent-emerald)" marker-end="url(#arrowEmerald)"/>
+          <line class="msg-line" x1="155" y1="155" x2="262" y2="185" stroke="var(--accent-emerald)" marker-end="url(#arrowEmerald)"/>
+          <line class="msg-line" x1="211" y1="155" x2="262" y2="185" stroke="var(--accent-emerald)" marker-end="url(#arrowEmerald)"/>
+          <text class="msg-text" x="190" y="172" fill="var(--accent-emerald)">fan-in</text>
+          <rect class="activation" x="262" y="185" width="10" height="50" fill="var(--accent-emerald)"/>
+        </svg>
+      </div>
+
+      <!-- Loop Flow -->
+      <div class="sequence-card fade-in">
+        <h3>条件付きサイクル（Loop）</h3>
+        <p class="desc">dict エッジで条件分岐し、品質基準まで反復</p>
+        <svg class="seq-diagram" viewBox="0 0 300 300">
+          <rect class="actor-box" x="10" y="10" width="56" height="30" style="stroke:var(--accent-amber)"/>
+          <text class="actor-text" x="38" y="30" style="font-size:10px">START</text>
+          <rect class="actor-box" x="90" y="10" width="70" height="30"/>
+          <text class="actor-text" x="125" y="30" style="font-size:10px">Generator</text>
+          <rect class="actor-box" x="190" y="10" width="60" height="30"/>
+          <text class="actor-text" x="220" y="30" style="font-size:10px">Tester</text>
+          <line class="lifeline" x1="38" y1="40" x2="38" y2="290"/>
+          <line class="lifeline" x1="125" y1="40" x2="125" y2="290"/>
+          <line class="lifeline" x1="220" y1="40" x2="220" y2="290"/>
+          <!-- Round 1 -->
+          <line class="msg-line" x1="43" y1="60" x2="120" y2="60" stroke="var(--accent-cyan)" marker-end="url(#arrowCyan)"/>
+          <text class="msg-text" x="65" y="54">query</text>
+          <rect class="activation" x="120" y="60" width="10" height="40" fill="var(--accent-cyan)"/>
+          <line class="msg-line" x1="130" y1="95" x2="215" y2="95" stroke="var(--accent-emerald)" marker-end="url(#arrowEmerald)"/>
+          <text class="msg-text" x="148" y="89" fill="var(--accent-emerald)">{code}</text>
+          <rect class="activation" x="215" y="95" width="10" height="40" fill="var(--accent-emerald)"/>
+          <!-- FAIL → loop back -->
+          <line class="msg-line" x1="215" y1="140" x2="130" y2="160" stroke="var(--accent-red)" stroke-dasharray="6 3" marker-end="url(#arrowRed)"/>
+          <text class="msg-text" x="148" y="145" fill="var(--accent-red)">{"FAIL"}</text>
+          <!-- Round 2 -->
+          <rect class="activation" x="120" y="160" width="10" height="40" fill="var(--accent-cyan)"/>
+          <line class="msg-line" x1="130" y1="195" x2="215" y2="195" stroke="var(--accent-emerald)" marker-end="url(#arrowEmerald)"/>
+          <text class="msg-text" x="148" y="189" fill="var(--accent-emerald)">{code v2}</text>
+          <rect class="activation" x="215" y="195" width="10" height="40" fill="var(--accent-emerald)"/>
+          <!-- PASS → END -->
+          <line class="msg-line" x1="215" y1="240" x2="43" y2="260" stroke="var(--accent-cyan)" stroke-dasharray="6 3" marker-end="url(#arrowCyan)"/>
+          <text class="msg-text" x="100" y="243" fill="var(--accent-cyan)">→ END ✓</text>
+          <!-- Loop box -->
+          <rect x="105" y="50" width="130" height="185" fill="none" stroke="var(--accent-amber)" stroke-width="1" stroke-dasharray="4 4" rx="8" opacity="0.4"/>
+          <text class="msg-text" x="112" y="246" fill="var(--accent-amber)" style="font-size:8px">条件付きサイクル</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Comparison Table -->
+<section>
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">Migration Matrix</div>
+      <h2>パターン別 移行マトリックス</h2>
+    </div>
+    <div class="comparison-table-wrapper fade-in">
+      <table class="comparison-table" id="comparisonTable">
+        <thead>
+          <tr>
+            <th>Level</th>
+            <th>パターン</th>
+            <th>v1 クラス</th>
+            <th></th>
+            <th>v2 Workflow 構文</th>
+            <th>root_agent 型</th>
+            <th>変更量</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Breaking Changes -->
+<section class="syntax-section" id="breaking">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">⚠️ Breaking Changes</div>
+      <h2>注意すべき破壊的変更</h2>
+      <p>v2 移行で発見した重要な差分と回避策</p>
+    </div>
+    <div class="breaking-grid">
+      <div class="breaking-card fade-in">
+        <div class="icon">🚫</div>
+        <h4>無条件サイクル禁止</h4>
+        <p>v1 の LoopAgent は暗黙的にループしたが、v2 では無条件サイクルは ValidationError になる</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ edges=[("START", a, b, (b, a))]</code><br>
+          <code style="color:var(--accent-emerald)">✅ edges=[("START", a, b, {"REVISE": a})]</code>
+        </div>
+      </div>
+      <div class="breaking-card fade-in">
+        <div class="icon">🧩</div>
+        <h4>Workflow は BaseNode</h4>
+        <p>Workflow は BaseAgent ではなく BaseNode のサブクラス。LlmAgent の sub_agents に入れられない</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ LlmAgent(sub_agents=[Workflow(...)])</code><br>
+          <code style="color:var(--accent-emerald)">✅ Workflow(edges=[("START", coordinator, ...)])</code>
+        </div>
+      </div>
+      <div class="breaking-card fade-in">
+        <div class="icon">📦</div>
+        <h4>Import パス変更</h4>
+        <p>google.adk.agents の SequentialAgent / ParallelAgent / LoopAgent は deprecated</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ from google.adk.agents import SequentialAgent</code><br>
+          <code style="color:var(--accent-emerald)">✅ from google.adk.workflow import Workflow</code>
+        </div>
+      </div>
+      <div class="breaking-card fade-in">
+        <div class="icon">🔐</div>
+        <h4>CVE-2026-4810 修正</h4>
+        <p>v1 に存在したセキュリティ脆弱性が v2.1.0 で修正。google-adk>=2.1.0 が必須</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">google-adk>=2.1.0</code><br>
+          <code style="color:var(--accent-emerald)">google-genai>=1.72.0</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Timeline -->
+<section id="timeline">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">Migration Timeline</div>
+      <h2>移行の実行ステップ</h2>
+    </div>
+    <div class="timeline fade-in">
+      <div class="timeline-item">
+        <div class="time">Phase 0</div>
+        <h4>Git ブランチ準備</h4>
+        <p>v1 ブランチで現在のコードを保存、v2 ブランチを作成して作業開始</p>
+      </div>
+      <div class="timeline-item">
+        <div class="time">Phase 1</div>
+        <h4>依存関係・基盤の更新</h4>
+        <p>pyproject.toml で google-adk>=2.1.0, google-genai>=1.72.0 に更新。pytest に DeprecationWarning フィルタ追加</p>
+      </div>
+      <div class="timeline-item">
+        <div class="time">Phase 2</div>
+        <h4>全12パターンの移行</h4>
+        <p>SequentialAgent → チェーンタプル、ParallelAgent → ネストタプル、LoopAgent → 条件付きサイクルへ一括移行</p>
+      </div>
+      <div class="timeline-item">
+        <div class="time">Phase 3</div>
+        <h4>テスト更新・検証</h4>
+        <p>test_agent_structure.py を graph.nodes / edges ベースのアサーションに全面書き直し。50テスト全 PASS</p>
+      </div>
+      <div class="timeline-item">
+        <div class="time">Phase 4-5</div>
+        <h4>ドキュメント・スキル更新</h4>
+        <p>35+ ファイルの README、SKILL.md、設計ドキュメントを v2 に更新</p>
+      </div>
+      <div class="timeline-item">
+        <div class="time">Phase 6</div>
+        <h4>インフラ確認</h4>
+        <p>Dockerfile / docker-compose.yml / .env.example は pyproject.toml ベースのため変更不要と確認</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>AI Agent Design Patterns — Google ADK v1 → v2 Migration Guide</p>
+    <p style="margin-top: 8px;">Built with ❤️ for Google Cloud Japan</p>
+  </div>
+</footer>
+
+<script>
+// ===== Pattern Data =====
+const patterns = [
+  { level: 1, name: 'Single Agent', dir: '01_single_agent', usecase: 'GCP ドキュメント Q&A', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#3b82f6', effort: '—',
+    v1Desc: 'LlmAgent 単体。ツール定義と instruction で動作。', v2Desc: 'v2 でも同じ。LlmAgent は変更なし。',
+    v1Arch: 'LlmAgent\n  ├── tools: [search, calc]\n  └── instruction: "..."', v2Arch: '（同一）' },
+  { level: 2, name: 'ReAct Pattern', dir: '02_react_pattern', usecase: '技術調査（Thought/Action/Obs）', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#3b82f6', effort: '—',
+    v1Desc: 'LlmAgent + ReAct プロンプト。思考プロセスを可視化。', v2Desc: '変更なし。LlmAgent ベース。',
+    v1Arch: 'LlmAgent\n  ├── tools: [...]\n  └── instruction: "Think step by step..."', v2Arch: '（同一）' },
+  { level: 3, name: 'Sequential', dir: '03_sequential', usecase: 'ETL データパイプライン', v1Class: 'SequentialAgent', v2Syntax: 'チェーンタプル', rootType: 'Workflow', changed: true, color: '#3b82f6', effort: '中',
+    v1Desc: 'SequentialAgent が sub_agents をリスト順に実行。output_key でデータ受け渡し。',
+    v2Desc: 'Workflow のチェーンタプルで直列実行を宣言。("START", a, b, c) でエッジが自動生成。',
+    v1Arch: 'SequentialAgent: etl_pipeline\n  ├── [1] extract_agent\n  ├── [2] transform_agent\n  └── [3] load_agent',
+    v2Arch: 'Workflow: etl_pipeline\n  edges: [("START", extract, transform, load)]\n  graph: START→extract→transform→load→END' },
+  { level: 4, name: 'Parallel', dir: '04_parallel', usecase: 'マルチソース AI ニュース集約', v1Class: 'ParallelAgent', v2Syntax: 'ネストタプル', rootType: 'Workflow', changed: true, color: '#a855f7', effort: '中',
+    v1Desc: 'ParallelAgent が sub_agents を同時並行で実行。各エージェントに異なる output_key が必須。',
+    v2Desc: 'ネストタプル (a, b, c) で fan-out、次のノードで fan-in。output_key のルールは同じ。',
+    v1Arch: 'ParallelAgent: multi_source\n  ├── web_researcher  (output_key: web)\n  ├── tech_researcher (output_key: tech)\n  └── fin_researcher  (output_key: fin)',
+    v2Arch: 'Workflow: multi_source\n  edges: [("START", (web, tech, fin), aggregator)]\n  graph: START→[web|tech|fin]→aggregator→END' },
+  { level: 5, name: 'Loop', dir: '05_loop', usecase: 'コード生成 & テストループ', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大',
+    v1Desc: 'LoopAgent が sub_agents を max_iterations まで繰り返し実行。テキストシグナルで終了判定。',
+    v2Desc: 'dict エッジで条件分岐。{"FAIL": generator} でループバック、それ以外は END へ。無条件サイクル禁止。',
+    v1Arch: 'LoopAgent: code_gen (max_iterations=5)\n  ├── [1] code_generator\n  └── [2] code_tester\n  （テキストに "PASS" があれば終了）',
+    v2Arch: 'Workflow: code_gen\n  edges: [("START", generator, tester, {"FAIL": generator})]\n  graph: START→generator→tester→{FAIL:generator | *:END}' },
+  { level: 6, name: 'Review & Critique', dir: '06_review_critique', usecase: 'ブログ記事品質保証', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大',
+    v1Desc: 'LoopAgent で Generator → Critic のサイクル。Critic が [APPROVED] を出すまで反復。',
+    v2Desc: '条件付きエッジ {"NEEDS_REVISION": generator} でサイクル。[APPROVED] なら END。',
+    v1Arch: 'LoopAgent: blog_review (max=4)\n  ├── [1] blog_generator\n  └── [2] blog_critic\n  （"APPROVED" で終了）',
+    v2Arch: 'Workflow: blog_review\n  edges: [("START", generator, critic,\n          {"NEEDS_REVISION": generator})]' },
+  { level: 7, name: 'Iterative Refinement', dir: '07_iterative_refinement', usecase: '技術ドキュメント自己改善', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大',
+    v1Desc: 'LoopAgent で1つの LlmAgent が自己評価・改善を繰り返す。スコアが閾値を超えたら終了。',
+    v2Desc: '条件付きエッジ {"REVISE": doc_refiner} でサイクル。スコア ≥ 85 なら END。',
+    v1Arch: 'LoopAgent: doc_refinement (max=5)\n  └── [1] doc_refiner\n  （スコア ≥ 85 で終了）',
+    v2Arch: 'Workflow: doc_refinement\n  edges: [("START", doc_refiner,\n          {"REVISE": doc_refiner})]' },
+  { level: 8, name: 'Coordinator', dir: '08_coordinator', usecase: 'カスタマーサポートルーター', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#ec4899', effort: '—',
+    v1Desc: 'LlmAgent がルーターとなり、sub_agents の専門エージェントに動的にルーティング。',
+    v2Desc: '変更なし。LlmAgent + sub_agents のパターンは v2 でも同じ。',
+    v1Arch: 'LlmAgent: coordinator\n  ├── billing_agent\n  ├── tech_support_agent\n  └── general_agent', v2Arch: '（同一）' },
+  { level: 9, name: 'Hierarchical', dir: '09_hierarchical', usecase: '競合分析（多層分解）', v1Class: 'LlmAgent 多層', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#ec4899', effort: '—',
+    v1Desc: 'LlmAgent の多層構造。各レイヤーが sub_agents を持つ階層型。',
+    v2Desc: '変更なし。LlmAgent の階層構造はそのまま。',
+    v1Arch: 'LlmAgent: director\n  ├── LlmAgent: market_team\n  │   ├── market_researcher\n  │   └── market_analyst\n  └── LlmAgent: tech_team\n      └── tech_researcher', v2Arch: '（同一）' },
+  { level: 10, name: 'Swarm', dir: '10_swarm', usecase: '製品設計コンセンサス', v1Class: 'LoopAgent + Sequential', v2Syntax: 'チェーン + サイクル統合', rootType: 'Workflow', changed: true, color: '#f59e0b', effort: '大',
+    v1Desc: 'SequentialAgent 内に LoopAgent をネスト。複数エキスパートが議論し、ファシリテーターが合意判定。',
+    v2Desc: 'Workflow 1つでチェーン + 条件付きサイクルを統合。{"NEXT_ROUND": market_expert} で議論を継続。',
+    v1Arch: 'SequentialAgent: swarm\n  ├── [1] LoopAgent: debate (max=3)\n  │   ├── market_expert\n  │   ├── tech_expert\n  │   ├── finance_expert\n  │   └── facilitator\n  └── [2] final_synthesizer',
+    v2Arch: 'Workflow: swarm\n  edges: [("START",\n    market, tech, finance, facilitator,\n    {"NEXT_ROUND": market},\n    synthesizer)]' },
+  { level: 11, name: 'Human-in-the-Loop', dir: '11_human_in_the_loop', usecase: 'コンテンツ承認ワークフロー', v1Class: 'カスタム dict 制御', v2Syntax: 'チェーンタプル + callback', rootType: 'Workflow', changed: true, color: '#f59e0b', effort: '中',
+    v1Desc: 'demo.py が3つのエージェントを手動で段階実行。Confirm.ask() で人間レビュー。',
+    v2Desc: 'Workflow チェーンタプルで宣言的に定義。before_agent_callback でレビューポイントを挿入。',
+    v1Arch: 'Manual step execution:\n  [1] content_creator → 手動確認\n  [2] compliance_checker → 手動確認\n  [3] final_publisher',
+    v2Arch: 'Workflow: content_approval\n  edges: [("START", creator, checker, publisher)]\n  before_agent_callback → skip_agent()' },
+  { level: '🏆', name: 'Capstone', dir: 'capstone', usecase: '全パターン統合 企業分析', v1Class: '全クラス統合', v2Syntax: 'Workflow 全構文統合', rootType: 'Workflow', changed: true, color: '#ef4444', effort: '特大',
+    v1Desc: 'Coordinator → SequentialAgent → ParallelAgent + LoopAgent の多重ネスト構造。',
+    v2Desc: 'Workflow 1つに全構文を統合。Coordinator を edges の先頭ノードに配置（BaseNode 制約回避）。',
+    v1Arch: 'LlmAgent: coordinator\n  └── SequentialAgent: pipeline\n      ├── ParallelAgent: gather\n      │   ├── web_researcher\n      │   ├── tech_researcher\n      │   └── finance_researcher\n      ├── analysis_agent\n      └── LoopAgent: review\n          ├── report_writer\n          └── report_critic',
+    v2Arch: 'Workflow: enterprise_research_pipeline\n  edges: [\n    ("START", coordinator,\n     (web, tech, finance),\n     analysis,\n     report_writer, report_critic,\n     {"REVISE": report_writer})\n  ]' },
+];
+
+// ===== Render Pattern Cards =====
+const grid = document.getElementById('patternGrid');
+patterns.forEach((p, i) => {
+  const card = document.createElement('div');
+  card.className = 'pattern-card fade-in';
+  card.innerHTML = `
+    <div class="pattern-card-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="left">
+        <div class="pattern-level" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}44">${p.level}</div>
+        <div class="meta">
+          <span class="name">${p.name}</span>
+          <span class="usecase">${p.usecase}</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="change-badge ${p.changed ? 'badge-workflow' : 'badge-unchanged'}">${p.changed ? '→ Workflow' : '変更なし'}</span>
+        <span class="toggle-icon">▼</span>
+      </div>
+    </div>
+    <div class="pattern-card-body">
+      <div class="diagram-wrapper">
+        <div class="diagram-box v1">
+          <div class="diagram-title">v1 Architecture</div>
+          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:12px;">${p.v1Desc}</p>
+          <pre style="margin:0;font-size:0.8rem;color:var(--accent-amber);line-height:1.6;white-space:pre-wrap;">${p.v1Arch}</pre>
+        </div>
+        <div class="diagram-box v2">
+          <div class="diagram-title">v2 Architecture</div>
+          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:12px;">${p.v2Desc}</p>
+          <pre style="margin:0;font-size:0.8rem;color:var(--accent-cyan);line-height:1.6;white-space:pre-wrap;">${p.v2Arch}</pre>
+        </div>
+      </div>
+    </div>
+  `;
+  grid.appendChild(card);
+});
+
+// ===== Render Comparison Table =====
+const tbody = document.querySelector('#comparisonTable tbody');
+patterns.forEach(p => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><strong style="color:${p.color}">${p.level}</strong></td>
+    <td>${p.name}</td>
+    <td class="v1-cell"><code>${p.v1Class}</code></td>
+    <td class="arrow-cell">→</td>
+    <td class="v2-cell"><code>${p.v2Syntax}</code></td>
+    <td><code>${p.rootType}</code></td>
+    <td>${p.effort}</td>
+  `;
+  tbody.appendChild(tr);
+});
+
+// ===== Scroll Animations =====
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
