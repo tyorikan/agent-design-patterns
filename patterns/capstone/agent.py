@@ -14,6 +14,14 @@ ADK v2 Workflow API を使用。
 4. Loop:                品質が基準に達するまでレポートを改善（条件付きサイクル）
 5. Review & Critique:   最終レポートを厳格に評価
 
+## データ受け渡し方法
+
+並列ノード（ネストタプル）の output_key で state_delta に書き込まれたデータは、
+セッション状態（session.state）へのマージタイミングが保証されない。
+そのため、fan-in 先のノード（analysis_agent, report_writer, report_critic）では
+instruction を **callable (async function)** にし、ReadonlyContext.state.get() で
+安全にデータを取得する。これにより KeyError を回避できる。
+
 ## アーキテクチャ図
 
 ```
@@ -26,11 +34,11 @@ User Request
     │
     ├── [Parallel: (web, tech, financial)]  → 各 *_data
     │
-    ├── [analysis_agent]                    → analysis_result
+    ├── [analysis_agent]                    → analysis_result  (callable instruction)
     │
-    ├── [report_writer]                     → report_draft
+    ├── [report_writer]                     → report_draft     (callable instruction)
     │
-    └── [report_critic]                     → critic_feedback
+    └── [report_critic]                     → critic_feedback  (callable instruction)
           ↺ NEEDS_IMPROVEMENT → report_writer（条件付きサイクル）
 ```
 """
@@ -39,6 +47,7 @@ import sys
 from pathlib import Path
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -152,13 +161,22 @@ financial_researcher = LlmAgent(
 
 # =====================================================
 # Layer: 統合分析（Sequential の中間ステップ）
+#   ※ 並列ノード（ネストタプル）の直後に実行される fan-in ノードのため、
+#     instruction を callable にして ReadonlyContext.state.get() で
+#     安全にデータを取得する（state_delta のマージタイミング問題を回避）。
 # =====================================================
 
-analysis_agent = LlmAgent(
-    name="enterprise_analyst",
-    model=settings.default_model,
-    description="収集したデータを統合して戦略的分析を行う",
-    instruction="""\
+
+async def _build_analysis_instruction(ctx: ReadonlyContext) -> str:
+    """analysis_agent 用の instruction を動的に構築する。
+
+    並列ノードの state_delta がセッションに反映された後に
+    ReadonlyContext.state から安全にデータを取得する。
+    """
+    web_data = ctx.state.get("web_data", "（データなし）")
+    tech_data = ctx.state.get("tech_data", "（データなし）")
+    financial_data = ctx.state.get("financial_data", "（データなし）")
+    return f"""\
 あなたは戦略コンサルタントです。
 以下の収集データを統合して、包括的な戦略分析を行ってください。
 
@@ -199,19 +217,36 @@ analysis_agent = LlmAgent(
 - リスクスコア (1-10 、低いほど良い)
 
 分析結果を構造化されたテキストで出力してください。
-""",
+"""
+
+
+analysis_agent = LlmAgent(
+    name="enterprise_analyst",
+    model=settings.default_model,
+    description="収集したデータを統合して戦略的分析を行う",
+    instruction=_build_analysis_instruction,  # callable: 並列ノードの state_delta 反映後に評価
     output_key="analysis_result",
 )
 
 # =====================================================
 # Layer: レポート生成 + レビュー（条件付きサイクル）
+#   ※ report_writer: 並列ノード由来の変数 (web_data 等) を参照するため callable。
+#   ※ report_critic: 条件付きサイクルで再実行されるため callable で安全に取得。
 # =====================================================
 
-report_writer = LlmAgent(
-    name="enterprise_report_writer",
-    model=settings.default_model,
-    description="分析データからエグゼクティブレポートを生成・改善する",
-    instruction="""\
+
+async def _build_report_writer_instruction(ctx: ReadonlyContext) -> str:
+    """report_writer 用の instruction を動的に構築する。
+
+    analysis_result は Sequential の前ステップから取得（順序保証あり）。
+    web_data / tech_data / financial_data は並列ノード由来のため、
+    state.get() で安全にフォールバック付きで取得する。
+    """
+    analysis_result = ctx.state.get("analysis_result", "（データなし）")
+    web_data = ctx.state.get("web_data", "（データなし）")
+    tech_data = ctx.state.get("tech_data", "（データなし）")
+    financial_data = ctx.state.get("financial_data", "（データなし）")
+    return f"""\
 あなたはビジネスライターです。
 
 ## 分析データ
@@ -255,15 +290,17 @@ report_writer = LlmAgent(
 - 投資魅力度: ★★★☆☆
 - 技術パートナーとしての魅力: ★★★★☆
 ---
-""",
-    output_key="report_draft",
-)
+"""
 
-report_critic = LlmAgent(
-    name="enterprise_report_critic",
-    model=settings.default_model,
-    description="レポートの品質を厳格に評価してフィードバックを提供する",
-    instruction="""\
+
+async def _build_report_critic_instruction(ctx: ReadonlyContext) -> str:
+    """report_critic 用の instruction を動的に構築する。
+
+    report_draft は Sequential の前ステップ (report_writer) から取得。
+    条件付きサイクルで再実行される場合にも安全にデータを取得する。
+    """
+    report_draft = ctx.state.get("report_draft", "（レポートなし）")
+    return f"""\
 あなたは品質管理の専門家です。
 以下のエグゼクティブレポートを厳格に評価してください。
 
@@ -291,7 +328,22 @@ report_critic = LlmAgent(
 ### 最終判定
 スコア 85 以上: [REPORT_APPROVED] - 配布可能
 スコア 85 未満: NEEDS_IMPROVEMENT - 改善して再提出
-""",
+"""
+
+
+report_writer = LlmAgent(
+    name="enterprise_report_writer",
+    model=settings.default_model,
+    description="分析データからエグゼクティブレポートを生成・改善する",
+    instruction=_build_report_writer_instruction,  # callable: 並列ノード由来の変数を安全に取得
+    output_key="report_draft",
+)
+
+report_critic = LlmAgent(
+    name="enterprise_report_critic",
+    model=settings.default_model,
+    description="レポートの品質を厳格に評価してフィードバックを提供する",
+    instruction=_build_report_critic_instruction,  # callable: サイクル再実行時にも安全に取得
     output_key="critic_feedback",
 )
 
