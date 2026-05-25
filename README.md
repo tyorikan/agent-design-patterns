@@ -303,6 +303,15 @@ PYTHONPATH=. python3 -c "from patterns.capstone.agent import root_agent; print(r
 
 ## 📚 参考資料
 
-- [Google Cloud: Agent Design Patterns](https://cloud.google.com/vertex-ai/generative-ai/docs/agent-design-patterns)
+### Google Cloud Architecture Center
+
+- [Agentic AI architecture guides（概要）](https://docs.cloud.google.com/architecture/agentic-ai-overview)
+- [Choose architecture components for an agentic AI system](https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components)
+- [Choose a design pattern for an agentic AI system](https://docs.cloud.google.com/architecture/choose-design-pattern-agentic-ai-system)
+- [Build a multiagent AI system](https://docs.cloud.google.com/architecture/multiagent-ai-system)
+- [Build a single-agent AI system using ADK and Cloud Run](https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run)
+
+### Google ADK / Vertex AI
+
 - [Google ADK Python ドキュメント](https://google.github.io/adk-docs/)
 - [Vertex AI Gemini API](https://cloud.google.com/vertex-ai/generative-ai/docs/gemini-api)
