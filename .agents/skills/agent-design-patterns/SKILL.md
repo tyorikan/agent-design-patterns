@@ -63,9 +63,11 @@ Input → [Agent A] → [Agent B] → [Agent C] → Output
 
 **ADK 実装:**
 ```python
-pipeline = SequentialAgent(
+from google.adk.workflow import Workflow
+
+pipeline = Workflow(
     name="Pipeline",
-    sub_agents=[agent_a, agent_b, agent_c]
+    edges=[('START', agent_a, agent_b, agent_c)]
 )
 # agent_a は output_key="result_a" で状態に保存
 # agent_b は instruction で {result_a} を参照
@@ -90,9 +92,13 @@ Input → [Dispatcher] →  ├→ [Agent B] →├→ [Aggregator] → Output
 
 **ADK 実装:**
 ```python
-parallel_step = ParallelAgent(
+from google.adk.workflow import Workflow
+
+research = Workflow(
     name="ParallelGatherer",
-    sub_agents=[market_agent, competitor_agent, news_agent]
+    edges=[
+        ('START', (market_agent, competitor_agent, news_agent), aggregator)
+    ]
     # 各エージェントは別々の output_key を使う！
 )
 ```
@@ -116,14 +122,17 @@ Input → [Agent A → Agent B] → condition? → [repeat] or [exit]
 
 **ADK 実装:**
 ```python
-loop = LoopAgent(
+from google.adk.workflow import Workflow
+
+loop = Workflow(
     name="Loop",
-    sub_agents=[processor, validator],
-    max_iterations=5  # 必須！
+    edges=[
+        ('START', processor, validator, {'RETRY': processor})
+    ]
 )
 ```
 
-**⚠️ 必須: 終了条件を必ず設計する（無限ループ防止）**
+**⚠️ 必須: `dict` による条件付きエッジが必要（無条件サイクルは v2 で禁止）**
 
 ---
 
@@ -139,14 +148,19 @@ Input → [Generator] → [Critic] → approved? → Output
 
 **ADK 実装:**
 ```python
-refinement = LoopAgent(
+from google.adk.workflow import Workflow
+
+generator = LlmAgent(name="Generator", output_key="draft", ...)
+critic = LlmAgent(
+    name="Critic", output_key="feedback",
+    instruction="ドラフト: {draft} を評価。改善が必要なら REVISE、承認なら APPROVED を記載"
+)
+
+refinement = Workflow(
     name="GenerateCritiqueLoop",
-    sub_agents=[
-        LlmAgent(name="Generator", output_key="draft"),
-        LlmAgent(name="Critic", output_key="feedback",
-                instruction="ドラフト: {draft} を評価し、承認なら [APPROVED] を記載")
-    ],
-    max_iterations=3
+    edges=[
+        ('START', generator, critic, {'REVISE': generator})
+    ]
 )
 ```
 
@@ -301,11 +315,11 @@ def request_human_approval(data: str, tool_context: ToolContext) -> str:
 | パターン | コスト | レイテンシ | 複雑性 | 柔軟性 | ADK クラス |
 |---|---|---|---|---|---|
 | Single Agent | 低 | 低 | 低 | 中 | `LlmAgent` |
-| Sequential | 低 | 低 | 低 | 低 | `SequentialAgent` |
-| Parallel | 中 | 低 | 中 | 低 | `ParallelAgent` |
-| Loop | 可変 | 高 | 中 | 中 | `LoopAgent` |
-| Review/Critique | 中 | 高 | 中 | 中 | `LoopAgent` |
-| Iterative Refinement | 中 | 高 | 中 | 中 | `LoopAgent` |
+| Sequential | 低 | 低 | 低 | 低 | `Workflow`（チェーンタプル） |
+| Parallel | 中 | 低 | 中 | 低 | `Workflow`（ネストタプル） |
+| Loop | 可変 | 高 | 中 | 中 | `Workflow`（条件付きサイクル） |
+| Review/Critique | 中 | 高 | 中 | 中 | `Workflow`（条件付きサイクル） |
+| Iterative Refinement | 中 | 高 | 中 | 中 | `Workflow`（条件付きサイクル） |
 | ReAct | 中 | 高 | 低 | 高 | `LlmAgent` |
 | Coordinator | 高 | 高 | 中 | 高 | `LlmAgent` |
 | Hierarchical | 最高 | 最高 | 最高 | 最高 | `LlmAgent` 多層 |
@@ -350,20 +364,24 @@ START
 実際の実装では複数パターンを組み合わせることが多い。
 
 ```python
+from google.adk.workflow import Workflow
+
 # 例: Parallel → Review/Critique → Coordinator の組み合わせ
-system = SequentialAgent(
+final_coordinator = LlmAgent(
+    name="FinalCoordinator",
+    sub_agents=[report_agent, alert_agent, archive_agent]
+)
+
+system = Workflow(
     name="EnterpriseSystem",
-    sub_agents=[
-        # Step 1: 並列データ収集
-        ParallelAgent(sub_agents=[source_a, source_b, source_c]),
-        
-        # Step 2: 品質チェックループ
-        LoopAgent(sub_agents=[synthesizer, quality_checker], max_iterations=3),
-        
-        # Step 3: 結果を適切な担当者にルーティング
-        LlmAgent(
-            name="FinalCoordinator",
-            sub_agents=[report_agent, alert_agent, archive_agent]
+    edges=[
+        # Step 1: 並列データ収集 → Step 2: 品質チェックサイクル → Step 3: ルーティング
+        ('START',
+         (source_a, source_b, source_c),   # fan-out→fan-in
+         synthesizer,
+         quality_checker,
+         {'REVISE': synthesizer},           # 条件付きサイクル
+         final_coordinator                  # Coordinator に委譲
         )
     ]
 )
