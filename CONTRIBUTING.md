@@ -114,8 +114,18 @@ class TestNewPatternStructure:
     def test_root_agent_name(self):
         assert self.mod.root_agent.name == "expected_name"
 
+    # LlmAgent パターンの場合
     def test_sub_agents_count(self):
         assert len(self.mod.root_agent.sub_agents) == N
+
+    # Workflow パターンの場合
+    def test_root_agent_is_workflow(self):
+        from google.adk.workflow import Workflow
+        assert isinstance(self.mod.root_agent, Workflow)
+
+    def test_graph_has_expected_nodes(self):
+        node_names = [n.name for n in self.mod.root_agent.graph.nodes]
+        assert "expected_node" in node_names
 ```
 
 #### Lv.2 統合テスト (`tests/integration/test_patterns.py`)

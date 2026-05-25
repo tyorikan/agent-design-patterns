@@ -1,8 +1,12 @@
-"""Review & Critique Pattern - ブログ記事 Generator/Critic ループ。
+"""Review & Critique Pattern - ブログ記事 Generator/Critic ループ（Workflow v2）。
 
 パターンの特徴:
-    Loop Pattern の特殊形。Generator と Critic の2エージェントが
+    Workflow の条件付きサイクルで Generator と Critic の2エージェントが
     コンテンツの品質が基準を満たすまで繰り返す。
+
+    edges の最後の dict が条件付きサイクルを定義:
+    - critic が 'REVISE' を返す → generator に戻る
+    - それ以外 → ワークフロー終了
 
     Loop (Lv.5) との違い:
     - Loop: 同一タスクを繰り返す汎用ループ
@@ -12,7 +16,8 @@
 import sys
 from pathlib import Path
 
-from google.adk.agents import LlmAgent, LoopAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -27,7 +32,7 @@ generator = LlmAgent(
     name="blog_generator",
     model=settings.default_model,
     description="ブログ記事を生成・改善する",
-    instruction="""
+    instruction="""\
 あなたはプロのテクニカルライターです。
 
 ## タスク
@@ -48,12 +53,13 @@ generator = LlmAgent(
 
 # =====================================================
 # Critic: 批評エージェント
+# ★ ルーティング: REVISE を返すとループ継続、それ以外で終了
 # =====================================================
 critic = LlmAgent(
     name="blog_critic",
     model=settings.default_model,
     description="ブログ記事を批評・改善提案する",
-    instruction="""
+    instruction="""\
 あなたは厳格な編集者です。以下のブログ記事を評価してください。
 
 ## 評価対象記事
@@ -80,19 +86,28 @@ critic = LlmAgent(
 ### 最終判定
 スコアが 80 以上なら: [APPROVED] - 公開可能です
 スコアが 80 未満なら: [NEEDS_REVISION] - 上記の点を改善してください
+
+⚠️ 重要:
+- スコアが 80 未満の場合は route を REVISE にしてください。
 """,
     output_key="critic_feedback",
 )
 
 # =====================================================
-# Review & Critique ループ
+# Workflow（条件付きサイクル）
 # =====================================================
-root_agent = LoopAgent(
+# edges の構造:
+#   ('START', generator, critic, {'REVISE': generator})
+#
+# 動作:
+#   START → generator → critic
+#     → critic が 'REVISE' を返す → generator に戻る
+#     → それ以外 → ワークフロー終了
+# =====================================================
+root_agent = Workflow(
     name="blog_review_loop",
     description="Generator と Critic がコンテンツ品質を保証するまで繰り返すレビューループ",
-    sub_agents=[
-        generator,  # 記事を生成・改善
-        critic,     # 記事を批評
+    edges=[
+        ("START", generator, critic, {"REVISE": generator}),
     ],
-    max_iterations=4,  # 最大4回（= 4サイクルの生成+批評）
 )

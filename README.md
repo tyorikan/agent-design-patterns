@@ -57,8 +57,8 @@ pytest tests/ -v              # 全テスト
 |-------|---------|------------|------------|-----------|
 | Lv.1 | **Single Agent** | `patterns/01_single_agent/` | GCP ドキュメント Q&A | `LlmAgent` |
 | Lv.2 | **ReAct Pattern** | `patterns/02_react_pattern/` | 技術調査（Thought/Action/Obs 可視化） | `LlmAgent` |
-| Lv.3 | **Sequential** | `patterns/03_sequential/` | ETL データパイプライン | `SequentialAgent` |
-| Lv.4 | **Parallel** | `patterns/04_parallel/` | マルチソース AI ニュース集約 | `ParallelAgent` |
+| Lv.3 | **Sequential** | `patterns/03_sequential/` | ETL データパイプライン | `Workflow` チェーンタプル |
+| Lv.4 | **Parallel** | `patterns/04_parallel/` | マルチソース AI ニュース集約 | `Workflow` ネストタプル |
 
 ### 反復ワークフロー（Iterative Workflows）
 
@@ -66,9 +66,9 @@ pytest tests/ -v              # 全テスト
 
 | Level | パターン | ディレクトリ | ユースケース | ADK クラス |
 |-------|---------|------------|------------|-----------|
-| Lv.5 | **Loop** | `patterns/05_loop/` | コード生成 & テストループ | `LoopAgent` |
-| Lv.6 | **Review & Critique** | `patterns/06_review_critique/` | ブログ記事品質保証 | `LoopAgent` |
-| Lv.7 | **Iterative Refinement** | `patterns/07_iterative_refinement/` | 技術ドキュメント自己改善 | `LoopAgent` |
+| Lv.5 | **Loop** | `patterns/05_loop/` | コード生成 & テストループ | `Workflow` 条件付きサイクル |
+| Lv.6 | **Review & Critique** | `patterns/06_review_critique/` | ブログ記事品質保証 | `Workflow` 条件付きサイクル |
+| Lv.7 | **Iterative Refinement** | `patterns/07_iterative_refinement/` | 技術ドキュメント自己改善 | `Workflow` 条件付きサイクル |
 
 ### 動的オーケストレーション（Dynamic Orchestration）
 
@@ -78,14 +78,14 @@ LLM が動的にルーティング・タスク分解を行う。
 |-------|---------|------------|------------|-----------|
 | Lv.8 | **Coordinator** | `patterns/08_coordinator/` | カスタマーサポートルーター | `LlmAgent` |
 | Lv.9 | **Hierarchical** | `patterns/09_hierarchical/` | 競合分析（多層分解） | `LlmAgent` 多層 |
-| Lv.10 | **Swarm** | `patterns/10_swarm/` | 製品設計コンセンサス | `LoopAgent` + 多エージェント |
+| Lv.10 | **Swarm** | `patterns/10_swarm/` | 製品設計コンセンサス | `Workflow` + 多エージェント |
 
 ### 特殊パターン
 
 | Level | パターン | ディレクトリ | ユースケース | ADK クラス |
 |-------|---------|------------|------------|-----------|
-| Bonus | **Human-in-the-Loop** | `patterns/11_human_in_the_loop/` | コンテンツ承認ワークフロー | カスタム |
-| 🏆 | **Capstone** | `patterns/capstone/` | 全パターン統合 企業分析レポート | 全クラス統合 |
+| Bonus | **Human-in-the-Loop** | `patterns/11_human_in_the_loop/` | コンテンツ承認ワークフロー | `Workflow` |
+| 🏆 | **Capstone** | `patterns/capstone/` | 全パターン統合 企業分析レポート | `Workflow` 全構文統合 |
 
 ## 🏗️ パターン選択フローチャート
 
@@ -121,22 +121,22 @@ LLM が動的にルーティング・タスク分解を行う。
 [Coordinator (Lv.8)]
     │
     ▼
-[SequentialAgent (Lv.3)]
-    ├── [ParallelAgent (Lv.4)]      ← 3ソース並列データ収集
+[Workflow]
+    ├── [並列 (Lv.4)]             ← 3ソース並列データ収集
     │   ├── Web Researcher
     │   ├── Tech Researcher
     │   └── Finance Researcher
-    ├── [Analysis Agent]             ← SWOT 分析
-    └── [LoopAgent (Lv.5)]           ← 品質改善ループ
+    ├── [Analysis Agent]          ← SWOT 分析
+    └── [サイクル (Lv.5)]          ← 品質改善ループ
         ├── Report Writer (Lv.6)
         └── Report Critic (Lv.6)
 ```
 
-**組み合わせの原則:**
-1. **外側に SequentialAgent** → 全体のパイプライン制御
-2. **独立タスクは ParallelAgent** → レイテンシ削減
-3. **品質保証は LoopAgent** → Review & Critique で反復改善
-4. **柔軟なルーティングは LlmAgent** → Coordinator パターン
+**組み合わせの原則（Workflow 構文）:**
+1. **チェーンタプル** `("START", a, b, c)` → 全体のパイプライン制御
+2. **ネストタプル** `("START", (a, b, c), agg)` → 独立タスクの並列実行
+3. **条件付きサイクル** `(a, b, {"REVISE": a})` → 品質基準達成までの反復改善
+4. **LlmAgent + sub_agents** → 柔軟なルーティング（Coordinator パターン）
 
 ## 🔑 ADK の重要知識
 
@@ -166,17 +166,30 @@ agent_b = LlmAgent(
 )
 ```
 
-### ParallelAgent の各エージェントは異なる `output_key` を使う
+### Workflow の並列実行はネストタプルで定義
 
 ```python
-# ⚠️ 各エージェントで別々のキーを使わないと結果が上書きされる
-ParallelAgent(
-    sub_agents=[
-        LlmAgent(output_key="source_a"),  # ← 固有のキー
-        LlmAgent(output_key="source_b"),  # ← 固有のキー
-        LlmAgent(output_key="source_c"),  # ← 固有のキー
-    ]
+from google.adk.workflow import Workflow
+
+# ⚙️ 各エージェントで別々の output_key を使わないと結果が上書きされる
+root_agent = Workflow(
+    name="parallel_example",
+    edges=[
+        ("START", (source_a, source_b, source_c), aggregator),
+    ],
 )
+```
+
+### Workflow は BaseAgent ではなく BaseNode
+
+```python
+# ❌ Workflow は sub_agents に入れられない
+root_agent = LlmAgent(sub_agents=[Workflow(...)])  # ValidationError!
+
+# ✅ 代わりに Workflow の edges に組み込む
+root_agent = Workflow(edges=[
+    ("START", coordinator, (parallel_a, parallel_b), ...),
+])
 ```
 
 ## 🧪 テスト
@@ -219,8 +232,8 @@ pytest tests/unit/test_agent_structure.py::TestSwarmStructure -v
 
 | 技術 | バージョン | 用途 |
 |------|-----------|------|
-| `google-adk` | 1.19.0+ | エージェントフレームワーク |
-| `google-genai` | 1.52.0+ | Gemini モデルクライアント |
+| `google-adk` | 2.1.0+ | エージェントフレームワーク（Workflow API） |
+| `google-genai` | 1.72.0+ | Gemini モデルクライアント |
 | `Gemini 3.5 Flash` | - | デフォルト LLM |
 | `Vertex AI` | - | エンドポイント（ADC 認証） |
 | `pydantic-settings` | 2.4.0+ | 設定管理 |
@@ -271,7 +284,7 @@ docker compose run --rm runner bash -c "PYTHONPATH=/app python3 patterns/01_sing
 | `KeyError: '{variable_name}'` | セッション状態にない変数を参照 | 最初のエージェントでは `{変数}` を使わない |
 | `ModuleNotFoundError: No module named 'shared'` | PYTHONPATH 未設定 | `PYTHONPATH=. python3 ...` で実行 |
 | `Permission denied (Vertex AI)` | API 未有効化 | `gcloud services enable aiplatform.googleapis.com` |
-| `LoopAgent が終了しない` | 終了条件がない | `max_iterations` を必ず設定 |
+| `無条件サイクルエラー` | Workflow で `(b, a)` のような無条件ループ | `{"REVISE": a}` のような条件付きエッジを使う |
 
 ### デバッグのコツ
 

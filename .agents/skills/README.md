@@ -26,7 +26,7 @@
 
 - **言語**: Python 3.12+
 - **パッケージ管理**: pip (pyproject.toml) + uv (Docker)
-- **エージェントフレームワーク**: Google ADK Python 1.19+
+- **エージェントフレームワーク**: Google ADK Python 2.1+ (Workflow API)
 - **LLM**: Vertex AI Gemini 3.5 Flash / Pro
 - **エージェント間通信**: A2A Protocol
 - **外部ツール連携**: MCP (Model Context Protocol)

@@ -1,4 +1,7 @@
-"""Sequential Pattern - ETL データパイプライン（修正版）。
+"""Sequential Pattern - ETL データパイプライン（Workflow v2）。
+
+ADK v2 の Workflow チェーンタプルで Sequential を実現。
+('START', a, b, c, d) で順次実行される。
 
 ADK の {変数名} はセッション状態からの参照。
 最初のエージェント（extractor）はセッション状態が空なので {変数} は使えない。
@@ -8,7 +11,8 @@ ADK の {変数名} はセッション状態からの参照。
 import sys
 from pathlib import Path
 
-from google.adk.agents import LlmAgent, SequentialAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -145,15 +149,19 @@ summarizer_agent = LlmAgent(
 )
 
 # =====================================================
-# Sequential パターンのオーケストレーター
+# Workflow チェーンタプルで Sequential パターンを実現
+# ('START', a, b, c, d) → extractor → validator → transformer → summarizer
 # =====================================================
-root_agent = SequentialAgent(
+root_agent = Workflow(
     name="etl_pipeline",
     description="データ抽出・検証・変換・サマリーを順次実行する ETL パイプライン",
-    sub_agents=[
-        extractor_agent,    # Step 1: 抽出（ユーザーメッセージから直接）
-        validator_agent,    # Step 2: 検証 ({extracted_data} を参照)
-        transformer_agent,  # Step 3: 変換 ({extracted_data}, {validation_result} を参照)
-        summarizer_agent,   # Step 4: サマリー（全結果を参照）
+    edges=[
+        (
+            "START",
+            extractor_agent,     # Step 1: 抽出（ユーザーメッセージから直接）
+            validator_agent,     # Step 2: 検証 ({extracted_data} を参照)
+            transformer_agent,   # Step 3: 変換 ({extracted_data}, {validation_result} を参照)
+            summarizer_agent,    # Step 4: サマリー（全結果を参照）
+        ),
     ],
 )

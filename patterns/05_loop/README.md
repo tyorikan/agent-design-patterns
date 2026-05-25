@@ -3,13 +3,14 @@
 ## 概念
 
 **Loop Pattern** は、終了条件を満たすまでサブエージェントのシーケンスを **繰り返し実行** するパターン。
+`Workflow` の条件付きエッジ（dict 構文）でサイクルを表現する。
 
 ```
 Input
   │
   ▼
 ┌─────────────────────────────────────┐
-│             LoopAgent               │
+│      Workflow（条件付きサイクル）     │
 │  ┌─────────────────────────────┐   │
 │  │  [Agent A] → [Agent B]      │   │  ← 1回目
 │  └─────────────────────────────┘   │
@@ -54,15 +55,21 @@ User Request: "XXX を行う Python 関数を作って"
 
 ## ⚠️ 重要: 終了条件の設計
 
-LoopAgent には **必ず `max_iterations`** を設定すること！
-エージェント自身は「終了すべき」という判断を出力テキスト内のシグナルで行う。
+`Workflow` の条件付きサイクルでは **無条件サイクルは禁止** されている。
+必ず dict による条件付きエッジを使い、終了条件を明示すること。
 
 ```python
-LoopAgent(
-    sub_agents=[generator, tester],
-    max_iterations=5  # 必須！
+from google.adk.workflow import Workflow
+
+loop = Workflow(
+    name='code_gen_loop',
+    edges=[
+        ('START', generator, tester, {'REVISE': generator})
+    ]
 )
 ```
+
+`tester` の出力に `'REVISE'` が含まれれば `generator` に戻り、それ以外なら終了する。
 
 ## トレードオフ
 
@@ -86,8 +93,8 @@ pytest tests/integration/test_patterns.py::TestLoop -v
 
 ## 学習ポイント
 
-1. `LoopAgent` の `max_iterations` の重要性
-2. ループ終了の方法（出力テキストのシグナル vs カスタムコールバック）
+1. `Workflow` の条件付きエッジ（dict 構文 `{'REVISE': agent}`）でサイクルを表現する方法
+2. 無条件サイクル禁止のルールと、終了条件を明示する設計
 3. セッション状態 (`output_key`) を使ったループ間のデータ引き継ぎ
 4. ループが収束しない場合のリスクと対策
 

@@ -94,7 +94,7 @@ async def run_agent_final_response(agent, app_name, query) -> str:
     ...
 
 async def run_agent_all_text(agent, app_name, query) -> str:
-    """全イベントからテキスト収集。LoopAgent 系用。"""
+    """全イベントからテキスト収集。Workflow 系用。"""
     ...
 
 async def run_agent_trajectory(agent, app_name, query) -> tuple[str, list[str]]:
@@ -108,7 +108,7 @@ async def run_agent_trajectory(agent, app_name, query) -> tuple[str, list[str]]:
 |---|---|
 | 言語 | Python 3.12+ |
 | パッケージ管理 | pip (pyproject.toml) + uv (Docker) |
-| エージェントフレームワーク | Google ADK Python 1.19+ |
+| エージェントフレームワーク | Google ADK Python 2.1+ (Workflow API) |
 | LLM | Vertex AI Gemini 3.5 Flash |
 | エージェント間通信 | A2A Protocol（スキル定義のみ） |
 | セッション管理 | ADK InMemorySessionService |

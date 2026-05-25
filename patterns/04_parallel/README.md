@@ -4,11 +4,21 @@
 
 **Parallel Pattern** は、独立した複数のエージェントを **同時並行で** 実行するパターン。
 全エージェントの完了後、集約エージェントが結果をまとめる。
+`Workflow` のネストタプル構文で fan-out / fan-in を表現できる。
 
 ```
                     ┌→ [Agent A] → output_key="result_a" →┐
 Input → [Dispatch] →├→ [Agent B] → output_key="result_b" →├→ [Aggregator] → Output
                     └→ [Agent C] → output_key="result_c" →┘
+```
+
+```python
+from google.adk.workflow import Workflow
+
+pipeline = Workflow(
+    name='parallel_pipeline',
+    edges=[('START', (agent_a, agent_b, agent_c), aggregator)]
+)
 ```
 
 ## Sequential との違い
@@ -49,7 +59,7 @@ Query: "AI の最新動向を調べて"
 
 ## ⚠️ 重要: 並列エージェントのルール
 
-ParallelAgent の各サブエージェントは **必ず異なる `output_key`** を使うこと！
+`Workflow` のネストタプルで並列実行される各エージェントは **必ず異なる `output_key`** を使うこと！
 同じキーを使うと結果が上書きされる。
 
 ## 実行方法
@@ -65,7 +75,7 @@ pytest tests/integration/test_patterns.py::TestParallel -v
 
 ## 学習ポイント
 
-1. `ParallelAgent` と `SequentialAgent` を組み合わせる方法
+1. `Workflow` のネストタプル構文で fan-out / fan-in を表現する方法（`edges=[('START', (a, b, c), aggregator)]`）
 2. 並列実行で全体レイテンシを削減する仕組み
 3. 集約パターン（Fan-out → Fan-in）の設計
 4. 並列実行に適したタスクの見分け方（独立性の確認）

@@ -1,13 +1,15 @@
-"""Loop Pattern - コード生成 & テスト自動修正ループ（修正版）。
+"""Loop Pattern - コード生成 & テスト自動修正ループ（Workflow v2）。
 
 パターンの特徴:
-    LoopAgent が sub_agents を終了条件を満たすまで繰り返す。
+    Workflow の条件付きサイクルで sub_agents を終了条件を満たすまで繰り返す。
     今回は「コード生成 → テスト → 失敗なら修正」をループする。
 
-    重要: max_iterations で必ず上限を設定する！
+    edges の最後の dict が条件付きサイクルを定義:
+    - code_tester が 'REVISE' を返す → code_generator に戻る
+    - それ以外 → ワークフロー終了
 
 ADK の {変数名} の注意点:
-    - LoopAgent の最初のイテレーション開始時、セッション状態は空
+    - Workflow の最初のイテレーション開始時、セッション状態は空
     - 最初に実行される code_generator は {変数} を使わない
     - code_tester は code_generator の output_key={generated_code} を参照できる
 """
@@ -15,7 +17,8 @@ ADK の {変数名} の注意点:
 import sys
 from pathlib import Path
 
-from google.adk.agents import LlmAgent, LoopAgent
+from google.adk.agents import LlmAgent
+from google.adk.workflow import Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -32,7 +35,7 @@ code_generator = LlmAgent(
     name="code_generator",
     model=settings.default_model,
     description="Python 関数のコードを生成・改善する",
-    instruction="""
+    instruction="""\
 あなたは熟練した Python エンジニアです。
 
 ## タスク
@@ -57,12 +60,13 @@ code_generator = LlmAgent(
 # =====================================================
 # Step 2: コードテスト・評価エージェント
 # ★ code_generator の output_key={generated_code} を参照できる
+# ★ ルーティング: REVISE を返すとループ継続、それ以外で終了
 # =====================================================
 code_tester = LlmAgent(
     name="code_tester",
     model=settings.default_model,
     description="生成されたコードをテスト・評価する",
-    instruction="""
+    instruction="""\
 あなたは QA エンジニアです。以下のコードを厳格に評価してください。
 
 ## 評価対象コード
@@ -87,26 +91,28 @@ code_tester = LlmAgent(
 ### 改善提案
 （次の反復での改善点）
 
-⚠️ 重要: スコアが 80 以上なら必ず [APPROVED] と記載してください。
+⚠️ 重要:
+- スコアが 80 以上なら必ず [APPROVED] と記載してください。
+- スコアが 80 未満なら [NEEDS_REVISION] と記載し、route を REVISE にしてください。
 """,
     output_key="test_feedback",
 )
 
 # =====================================================
-# Loop Agent の定義
+# Workflow（条件付きサイクル）
 # =====================================================
-# LoopAgent = 終了条件を満たすまで sub_agents を繰り返す
+# edges の構造:
+#   ('START', code_generator, code_tester, {'REVISE': code_generator})
 #
-# 終了方法:
-#   1. max_iterations に達した場合（強制終了）
-#   2. エージェントが escalate アクションを実行した場合
+# 動作:
+#   START → code_generator → code_tester
+#     → code_tester が 'REVISE' を返す → code_generator に戻る
+#     → それ以外 → ワークフロー終了
 # =====================================================
-root_agent = LoopAgent(
+root_agent = Workflow(
     name="code_generation_loop",
     description="コード生成とテストを品質が担保されるまで繰り返すループ",
-    sub_agents=[
-        code_generator,  # コードを生成（ユーザーメッセージから）
-        code_tester,     # コードをテスト・評価 ({generated_code} を参照)
+    edges=[
+        ("START", code_generator, code_tester, {"REVISE": code_generator}),
     ],
-    max_iterations=5,  # ⚠️ 無限ループ防止: 最大5回まで
 )

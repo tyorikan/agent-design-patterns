@@ -3,7 +3,7 @@
 ## 概念
 
 Generator（生成）と Critic（批評）の **2エージェントがループ** して、コンテンツ品質を保証するパターン。
-Loop Pattern (Lv.5) の特殊形で、明確な役割分担が特徴。
+Loop Pattern (Lv.5) の特殊形で、明確な役割分担が特徴。`Workflow` の条件付きエッジで Critic → Generator のサイクルを表現する。
 
 ```
 Input
@@ -50,7 +50,7 @@ User: "Cloud Run のブログ記事を書いて"
      │
      ▼
 ┌─────────────────────────────────────────┐
-│           LoopAgent (max=4)             │
+│   Workflow（条件付きサイクル）           │
 │                                         │
 │  [blog_generator]                       │
 │    model: gemini-3.5-flash              │
@@ -69,6 +69,17 @@ User: "Cloud Run のブログ記事を書いて"
 │         └── 80点以上 [APPROVED]         │
 │             → ループ終了                │
 └─────────────────────────────────────────┘
+
+```python
+from google.adk.workflow import Workflow
+
+review_loop = Workflow(
+    name='review_critique',
+    edges=[
+        ('START', blog_generator, blog_critic, {'NEEDS_REVISION': blog_generator})
+    ]
+)
+```
 ```
 
 ## トレードオフ
@@ -97,8 +108,8 @@ pytest tests/integration/test_patterns.py::TestReviewCritique -v
 1. **Generator/Critic の役割設計**: 生成者と評価者を分離することで品質が向上する仕組み
 2. **`output_key` の循環**: Generator の `article_draft` を Critic が参照し、Critic の `critic_feedback` が次の Generator に影響
 3. **品質基準の `instruction` 定義**: スコアリング基準（各20点 × 5項目 = 100点満点）の設計方法
-4. **ループ終了シグナル**: `[APPROVED]` / `[NEEDS_REVISION]` という出力テキスト内のシグナルで LoopAgent を制御
-5. **`max_iterations` の設定**: 収束しない場合に備えた安全弁（このデモでは4回）
+4. **ループ終了シグナル**: `[APPROVED]` / `[NEEDS_REVISION]` という出力テキスト内のシグナルで `Workflow` の条件付きエッジを制御
+5. **条件付きエッジ**: `{'NEEDS_REVISION': blog_generator}` による明示的なサイクル制御（無条件サイクルは禁止）
 
 ## 次のステップ
 

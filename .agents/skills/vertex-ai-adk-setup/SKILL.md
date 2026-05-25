@@ -73,7 +73,7 @@ uv init my-agent
 cd my-agent
 
 # 依存関係を追加
-uv add google-adk
+uv add "google-adk>=2.1.0"
 uv add google-cloud-aiplatform
 
 # 開発用
@@ -107,8 +107,8 @@ class Settings(BaseSettings):
     google_genai_use_vertexai: bool = True
     
     # モデル設定
-    default_model: str = "gemini-2.0-flash"
-    pro_model: str = "gemini-2.0-pro"
+    default_model: str = "gemini-3.5-flash"
+    pro_model: str = "gemini-3.5-pro"
     
     # エージェント設定
     max_loop_iterations: int = 5
@@ -146,17 +146,17 @@ uv run ruff check .
 
 | モデル | 用途 | コスト |
 |---|---|---|
-| `gemini-2.0-flash` | 高速・低コスト（デフォルト推奨） | 低 |
-| `gemini-2.0-flash-thinking` | 推論が必要な複雑タスク | 中 |
-| `gemini-2.0-pro` | 最高精度 | 高 |
-| `gemini-1.5-flash` | フォールバック用 | 低 |
+| `gemini-3.5-flash` | 高速・低コスト（デフォルト推奨） | 低 |
+| `gemini-3.5-flash-thinking` | 推論が必要な複雑タスク | 中 |
+| `gemini-3.5-pro` | 最高精度 | 高 |
+| `gemini-2.5-flash` | フォールバック用 | 低 |
 
 ```python
 from google.genai.types import GenerateContentConfig
 
 # モデル設定例
 agent = LlmAgent(
-    model="gemini-2.0-flash",
+    model="gemini-3.5-flash",
     generate_content_config=GenerateContentConfig(
         temperature=0.1,      # 一貫性重視
         max_output_tokens=8192,

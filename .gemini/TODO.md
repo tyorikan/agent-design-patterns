@@ -54,3 +54,17 @@
 - [x] CONTRIBUTING.md の作成
 - [x] .gemini/DESIGN.md の最新化
 - [x] 全ドキュメントのテスト再構築対応更新
+
+## ADK v2 移行（v2 ブランチ）
+- [x] google-adk>=2.1.0, google-genai>=1.72.0 にアップグレード
+- [x] SequentialAgent → Workflow チェーンタプル（03, capstone）
+- [x] ParallelAgent → Workflow ネストタプル fan-out/fan-in（04, capstone）
+- [x] LoopAgent → Workflow 条件付きサイクル（05, 06, 07, 10, capstone）
+- [x] Human-in-the-Loop → Workflow パイプライン（11）
+- [x] deprecated import ゼロ確認
+- [x] test_agent_structure.py を Workflow 対応に書き直し
+- [x] 全50テスト PASS 確認
+- [x] .gemini/ ドキュメント更新（DESIGN.md, REQUIREMENTS.md, TODO.md）
+- [x] 各パターン README.md の v2 更新
+- [x] プロジェクト README.md の v2 更新
+- [x] .agents/skills/*.md の v2 更新
