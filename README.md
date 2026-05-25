@@ -311,7 +311,8 @@ PYTHONPATH=. python3 -c "from patterns.capstone.agent import root_agent; print(r
 - [Build a multiagent AI system](https://docs.cloud.google.com/architecture/multiagent-ai-system)
 - [Build a single-agent AI system using ADK and Cloud Run](https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run)
 
-### Google ADK / Vertex AI
+### Google ADK / Gemini Enterprise Agent Platform
 
 - [Google ADK Python ドキュメント](https://google.github.io/adk-docs/)
-- [Vertex AI Gemini API](https://cloud.google.com/vertex-ai/generative-ai/docs/gemini-api)
+- [Gemini Enterprise Agent Platform](https://docs.cloud.google.com/gemini-enterprise-agent-platform)
+- [Gemini 3.5 Flash モデル仕様](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash)
