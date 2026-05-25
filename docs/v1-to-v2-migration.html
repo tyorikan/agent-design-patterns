@@ -307,6 +307,88 @@ nav .nav-links a:hover { color: var(--accent-cyan); }
 .timeline-item h4 { margin-bottom: 8px; }
 .timeline-item p { color: var(--text-secondary); font-size: 0.9rem; }
 
+/* ===== Compat / Deprecated / New API Tables ===== */
+.api-section { background: var(--bg-secondary); }
+.api-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.api-card {
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius);
+  padding: 24px; position: relative; overflow: hidden; transition: transform 0.3s, box-shadow 0.3s;
+}
+.api-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-glow-cyan); }
+.api-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+}
+.api-card.compat::before { background: var(--gradient-emerald); }
+.api-card.deprecated::before { background: var(--gradient-amber); }
+.api-card.new-api::before { background: var(--gradient-purple); }
+.api-card .api-icon { font-size: 1.4rem; margin-bottom: 12px; }
+.api-card h4 { margin-bottom: 8px; font-size: 0.95rem; }
+.api-card p { color: var(--text-secondary); font-size: 0.85rem; }
+.api-card .code-snippet {
+  background: var(--bg-primary); border-radius: var(--radius-sm); padding: 12px 16px;
+  margin-top: 12px; font-size: 0.8rem; overflow-x: auto;
+}
+.api-card .code-snippet code { display: block; line-height: 1.8; }
+
+/* ===== CVE Severity ===== */
+.cve-card { border: 1px solid rgba(239, 68, 68, 0.3) !important; }
+.cve-card::before { background: linear-gradient(135deg, #ef4444, #dc2626) !important; height: 4px !important; }
+.cve-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+  border-radius: 100px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.cve-badge.critical { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); border: 1px solid rgba(239, 68, 68, 0.3); }
+.cve-detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;
+}
+.cve-detail-item { font-size: 0.8rem; }
+.cve-detail-item .label { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.cve-detail-item .value { color: var(--text-primary); font-weight: 500; margin-top: 2px; }
+
+/* ===== Dependency Table ===== */
+.dep-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-color);
+}
+.dep-table th {
+  background: var(--bg-card); padding: 14px 20px; font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+.dep-table td {
+  padding: 12px 20px; font-size: 0.88rem; border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+.dep-table tr:last-child td { border-bottom: none; }
+.dep-table .pkg-name { color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+.dep-table .ver-constraint { color: var(--accent-emerald); font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+.dep-table .reason { color: var(--text-secondary); font-size: 0.82rem; }
+
+/* ===== Impact Indicators ===== */
+.impact-high { color: var(--accent-red); }
+.impact-mid { color: var(--accent-amber); }
+.impact-none { color: var(--accent-emerald); }
+
+/* ===== State Delta Expanded Card ===== */
+.state-delta-card {
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius);
+  padding: 0; overflow: hidden; margin-top: 24px;
+}
+.state-delta-card .sd-header {
+  padding: 20px 28px; border-bottom: 1px solid var(--border-color); cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.state-delta-card .sd-header h4 { display: flex; align-items: center; gap: 10px; }
+.state-delta-card .sd-body { padding: 0 28px 28px; display: none; }
+.state-delta-card.open .sd-body { display: block; }
+.state-delta-card.open .sd-toggle { transform: rotate(180deg); }
+.sd-toggle { transition: transform 0.3s; color: var(--text-muted); font-size: 1.2rem; }
+.sd-cause-list { list-style: none; margin: 16px 0; }
+.sd-cause-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.88rem; display: flex; align-items: flex-start; gap: 8px; }
+.sd-cause-list li:last-child { border-bottom: none; }
+.sd-cause-list .bullet { color: var(--accent-cyan); font-weight: 700; flex-shrink: 0; }
+
 /* ===== Footer ===== */
 footer {
   padding: 48px 0; border-top: 1px solid var(--border-color); text-align: center;
@@ -327,6 +409,8 @@ footer {
   .stats-bar { grid-template-columns: repeat(2, 1fr); }
   nav .nav-links { display: none; }
   section { padding: 64px 0; }
+  .cve-detail-grid { grid-template-columns: 1fr; }
+  .api-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -338,10 +422,13 @@ footer {
     <div class="logo">ADK Migration Guide</div>
     <ul class="nav-links">
       <li><a href="#overview">概要</a></li>
+      <li><a href="#compat">互換API</a></li>
+      <li><a href="#deprecated">非推奨</a></li>
+      <li><a href="#new-api">新規API</a></li>
       <li><a href="#syntax">構文比較</a></li>
       <li><a href="#patterns">パターン進化</a></li>
-      <li><a href="#sequence">データフロー</a></li>
       <li><a href="#breaking">破壊的変更</a></li>
+      <li><a href="#deps">依存関係</a></li>
       <li><a href="#timeline">タイムライン</a></li>
     </ul>
   </div>
@@ -375,7 +462,7 @@ footer {
         <div class="stat-label">テスト PASS</div>
       </div>
       <div class="stat-item">
-        <div class="stat-number">0</div>
+        <div class="stat-number">4</div>
         <div class="stat-label">Deprecated API</div>
       </div>
       <div class="stat-item">
@@ -424,6 +511,181 @@ footer {
           <code class="code" style="color:var(--accent-cyan)">Workflow(edges=[("START", a, b, {"REVISE": a})])</code>
         </p>
         <p style="margin-top: 12px;">dict で条件分岐を定義。無条件サイクルは禁止。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Backward Compatible APIs -->
+<section class="api-section" id="compat">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">✅ Backward Compatible APIs</div>
+      <h2>v2 でも変更不要な API</h2>
+      <p>以下のコア API は v2 でもそのまま使用可能。既存コードの大部分はそのまま動作する</p>
+    </div>
+    <div class="api-grid">
+      <div class="api-card compat fade-in">
+        <div class="api-icon">🤖</div>
+        <h4>Agent Core</h4>
+        <p>LlmAgent の基本構成は変更なし。モデル、命令、サブエージェント、ツール定義すべて互換</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">LlmAgent(</code><br>
+          <code style="color:var(--text-secondary)">  model, instruction, output_key,</code><br>
+          <code style="color:var(--text-secondary)">  sub_agents, description, tools</code><br>
+          <code style="color:var(--accent-emerald)">)</code>
+        </div>
+      </div>
+      <div class="api-card compat fade-in">
+        <div class="api-icon">🏃</div>
+        <h4>Runner & Session</h4>
+        <p>Runner と InMemorySessionService の API は同じ。runner.run_async() も変更なし</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">Runner, InMemorySessionService</code><br>
+          <code style="color:var(--accent-emerald)">runner.run_async()</code>
+        </div>
+      </div>
+      <div class="api-card compat fade-in">
+        <div class="api-icon">📡</div>
+        <h4>Event & Response</h4>
+        <p>イベントストリームの判定ロジック、コンテンツパーツ取得は互換</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">event.is_final_response()</code><br>
+          <code style="color:var(--accent-emerald)">event.content.parts</code>
+        </div>
+      </div>
+      <div class="api-card compat fade-in">
+        <div class="api-icon">🔧</div>
+        <h4>Built-in Tools</h4>
+        <p>Google 検索やコード実行のツール、ToolContext API は変更なし</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">google_search, code_execution</code><br>
+          <code style="color:var(--accent-emerald)">ToolContext</code>
+        </div>
+      </div>
+      <div class="api-card compat fade-in">
+        <div class="api-icon">📦</div>
+        <h4>Types & Export</h4>
+        <p>Content/Part 型定義、root_agent export パターン、CLI コマンドすべて互換</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">types.Content / types.Part</code><br>
+          <code style="color:var(--accent-emerald)">root_agent export</code><br>
+          <code style="color:var(--accent-emerald)">adk web / adk run</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Deprecated APIs -->
+<section id="deprecated">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline" style="color:var(--accent-amber)">⚠️ Deprecated APIs</div>
+      <h2>非推奨になった API</h2>
+      <p>v2 でも動作するが DeprecationWarning が出る。早期移行を推奨</p>
+    </div>
+    <div class="api-grid">
+      <div class="api-card deprecated fade-in">
+        <div class="api-icon">⛓️</div>
+        <h4>SequentialAgent</h4>
+        <p>直列実行のオーケストレーションクラス</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ from google.adk.agents import SequentialAgent</code><br>
+          <code style="color:var(--accent-emerald)">✅ from google.adk.workflow import Workflow</code>
+        </div>
+      </div>
+      <div class="api-card deprecated fade-in">
+        <div class="api-icon">🔀</div>
+        <h4>ParallelAgent</h4>
+        <p>並列実行のオーケストレーションクラス</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ from google.adk.agents import ParallelAgent</code><br>
+          <code style="color:var(--accent-emerald)">✅ from google.adk.workflow import Workflow</code>
+        </div>
+      </div>
+      <div class="api-card deprecated fade-in">
+        <div class="api-icon">🔄</div>
+        <h4>LoopAgent</h4>
+        <p>繰り返し実行のオーケストレーションクラス</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ from google.adk.agents import LoopAgent</code><br>
+          <code style="color:var(--accent-emerald)">✅ from google.adk.workflow import Workflow</code>
+        </div>
+      </div>
+      <div class="api-card deprecated fade-in">
+        <div class="api-icon">📋</div>
+        <h4>global_instruction</h4>
+        <p>グローバルな命令文の設定方法が変更</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ global_instruction="..."</code><br>
+          <code style="color:var(--accent-emerald)">✅ GlobalInstructionPlugin("...")</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- New APIs -->
+<section class="api-section" id="new-api">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline" style="color:var(--accent-purple)">🚀 New APIs in v2</div>
+      <h2>新規追加された API</h2>
+      <p>v2 で導入された新しいクラス・機能・デコレータ</p>
+    </div>
+    <div class="api-grid">
+      <div class="api-card new-api fade-in">
+        <div class="api-icon">🏷️</div>
+        <h4>Agent (エイリアス)</h4>
+        <p>LlmAgent の短縮エイリアス。より直感的な命名</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-purple)">from google.adk.agents import Agent</code><br>
+          <code style="color:var(--text-muted)"># Agent == LlmAgent</code>
+        </div>
+      </div>
+      <div class="api-card new-api fade-in">
+        <div class="api-icon">🔗</div>
+        <h4>Workflow</h4>
+        <p>宣言的グラフ構文で全パターンを統一するオーケストレーション API</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-purple)">from google.adk.workflow import Workflow</code><br>
+          <code style="color:var(--text-muted)"># ⚠️ workflows ではなく workflow</code>
+        </div>
+      </div>
+      <div class="api-card new-api fade-in">
+        <div class="api-icon">📍</div>
+        <h4>Node / @node デコレータ</h4>
+        <p>Workflow のノードを定義するクラスとデコレータ</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-purple)">from google.adk.workflow import Node</code><br>
+          <code style="color:var(--accent-purple)">@node</code>
+        </div>
+      </div>
+      <div class="api-card new-api fade-in">
+        <div class="api-icon">➡️</div>
+        <h4>Edge / JoinNode / exit_loop</h4>
+        <p>エッジ定義、並列ノード合流、ループ脱出の制御プリミティブ</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-purple)">Edge, JoinNode, exit_loop</code>
+        </div>
+      </div>
+      <div class="api-card new-api fade-in">
+        <div class="api-icon">📱</div>
+        <h4>App / Task API / static_instruction</h4>
+        <p>アプリケーション構成、タスクライフサイクル、静的命令の新 API</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-purple)">App, Task, static_instruction</code>
+        </div>
+      </div>
+      <div class="api-card new-api fade-in">
+        <div class="api-icon">🔁</div>
+        <h4>自動リトライ / HITL ネイティブ</h4>
+        <p>失敗時の自動リトライ機構と Human-in-the-Loop のネイティブサポート</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-purple)">auto_retry=True</code><br>
+          <code style="color:var(--accent-purple)">human_approval_required=True</code>
+        </div>
       </div>
     </div>
   </div>
@@ -709,10 +971,25 @@ root_agent = <span class="new">Workflow</span>(
             <th>v2 Workflow 構文</th>
             <th>root_agent 型</th>
             <th>変更量</th>
+            <th>影響度</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
+    </div>
+  </div>
+</section>
+
+<!-- Project Impact Summary -->
+<section class="api-section">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">📊 Project Impact Summary</div>
+      <h2>プロジェクト影響度サマリー</h2>
+      <p>全12パターンの影響度を3段階で分類</p>
+    </div>
+    <div id="impactSummary" class="fade-in">
+      <!-- Rendered by JS -->
     </div>
   </div>
 </section>
@@ -753,15 +1030,161 @@ root_agent = <span class="new">Workflow</span>(
           <code style="color:var(--accent-emerald)">✅ from google.adk.workflow import Workflow</code>
         </div>
       </div>
-      <div class="breaking-card fade-in">
+      <div class="breaking-card fade-in cve-card">
         <div class="icon">🔐</div>
-        <h4>CVE-2026-4810 修正</h4>
-        <p>v1 に存在したセキュリティ脆弱性が v2.1.0 で修正。google-adk>=2.1.0 が必須</p>
+        <h4>CVE-2026-4810 セキュリティ脆弱性</h4>
+        <div style="margin: 8px 0;">
+          <span class="cve-badge critical">🔴 Critical — CVSS 9.3–10.0</span>
+        </div>
+        <p>Code Injection + Missing Authentication。v1 の重大な脆弱性が修正済み</p>
+        <div class="cve-detail-grid">
+          <div class="cve-detail-item">
+            <div class="label">脆弱性タイプ</div>
+            <div class="value">Code Injection + Missing Authentication</div>
+          </div>
+          <div class="cve-detail-item">
+            <div class="label">影響バージョン</div>
+            <div class="value" style="color:var(--accent-red)">1.7.0 〜 1.28.0</div>
+          </div>
+          <div class="cve-detail-item">
+            <div class="label">修正バージョン (v1系)</div>
+            <div class="value" style="color:var(--accent-emerald)">≥ 1.28.1</div>
+          </div>
+          <div class="cve-detail-item">
+            <div class="label">修正バージョン (v2系)</div>
+            <div class="value" style="color:var(--accent-emerald)">≥ 2.0.0a3</div>
+          </div>
+        </div>
         <div class="code-snippet">
-          <code style="color:var(--accent-emerald)">google-adk>=2.1.0</code><br>
+          <code style="color:var(--accent-emerald)">google-adk>=2.1.0  # 推奨: 最新 v2</code><br>
           <code style="color:var(--accent-emerald)">google-genai>=1.72.0</code>
         </div>
       </div>
+
+      <!-- 実装時の追加発見カード群 -->
+      <div class="breaking-card fade-in">
+        <div class="icon">🔍</div>
+        <h4>Import パス: workflow vs workflows</h4>
+        <p><code style="color:var(--accent-red)">google.adk.workflows</code> は存在しない。正しくは単数形</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ from google.adk.workflows import Workflow</code><br>
+          <code style="color:var(--accent-emerald)">✅ from google.adk.workflow import Workflow</code>
+        </div>
+      </div>
+      <div class="breaking-card fade-in">
+        <div class="icon">🏗️</div>
+        <h4>Workflow ≠ BaseAgent</h4>
+        <p>Workflow は BaseAgent ではなく BaseNode のサブクラス。sub_agents パラメータに入れるとエラー</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-red)">❌ LlmAgent(sub_agents=[Workflow(...)])</code><br>
+          <code style="color:var(--accent-emerald)">✅ root_agent = Workflow(edges=[...])</code>
+        </div>
+      </div>
+      <div class="breaking-card fade-in">
+        <div class="icon">📥</div>
+        <h4>uv sync staging index 問題</h4>
+        <p>v2 alpha/beta は PyPI staging index に公開される場合があり、<code>uv sync</code> でエラーになることがある</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">uv sync --extra-index-url ...</code>
+        </div>
+      </div>
+      <div class="breaking-card fade-in">
+        <div class="icon">🔗</div>
+        <h4>edges のチェーンタプル構文</h4>
+        <p>edges リスト内の各タプルは <code>("START", ...)</code> で始まる必要がある。複数チェーンは複数タプルで表現</p>
+        <div class="code-snippet">
+          <code style="color:var(--accent-emerald)">edges=[("START", a, b, c)]</code><br>
+          <code style="color:var(--text-muted)"># 1タプル = 1チェーン</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- 付録 A: state_delta タイミング問題 -->
+    <div class="state-delta-card fade-in">
+      <div class="sd-header" onclick="this.parentElement.classList.toggle('open')">
+        <h4>📌 付録 A: state_delta タイミング問題 <span style="font-size:0.75rem;color:var(--accent-amber);font-weight:400;margin-left:8px;">深掘り</span></h4>
+        <span class="sd-toggle">▼</span>
+      </div>
+      <div class="sd-body">
+        <h4 style="margin: 16px 0 8px; font-size: 0.9rem; color: var(--accent-cyan);">根本原因</h4>
+        <ul class="sd-cause-list">
+          <li><span class="bullet">→</span> <code>output_key</code> → <code>state_delta</code> → <code>session.state</code> への反映タイミングが非同期</li>
+          <li><span class="bullet">→</span> Sequential Workflow では問題なし（直列のため state が確定済み）</li>
+          <li><span class="bullet">→</span> Parallel Workflow（ネストタプル）で発生：複数ノードが同時に state を書き込む</li>
+        </ul>
+        <h4 style="margin: 16px 0 8px; font-size: 0.9rem; color: var(--accent-cyan);">解決策</h4>
+        <p style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:16px;">instruction を callable にして ReadonlyContext.state.get() で動的に参照する</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="code-panel v1">
+            <div class="panel-header">● Before — 静的参照（🔴 NG）</div>
+            <pre><code><span class="cm"># instruction が定義時に評価される</span>
+<span class="dep">instruction</span>=<span class="str">f"data: {state['raw_data']}"</span>
+<span class="cm"># → Parallel では未確定の state を参照してしまう</span></code></pre>
+          </div>
+          <div class="code-panel v2">
+            <div class="panel-header">● After — callable 参照（✅ OK）</div>
+            <pre><code><span class="cm"># 実行時に動的に state を取得</span>
+<span class="new">instruction</span>=<span class="kw">lambda</span> ctx: (
+    <span class="str">f"data: {ctx.state.get('raw_data', '')}"</span>
+)
+<span class="cm"># → 実行時点で確定済みの state を参照</span></code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Dependency Version Constraints -->
+<section id="deps">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="overline">📦 Dependency Constraints</div>
+      <h2>依存バージョン制約</h2>
+      <p>v2 移行で必要な依存パッケージとバージョン制約</p>
+    </div>
+    <div class="comparison-table-wrapper fade-in">
+      <table class="dep-table">
+        <thead>
+          <tr>
+            <th>パッケージ</th>
+            <th>バージョン制約</th>
+            <th>理由</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="pkg-name">google-genai</td>
+            <td class="ver-constraint">>=1.72,&lt;2</td>
+            <td class="reason">Workflow API の基盤。v2 API の型定義に依存</td>
+          </tr>
+          <tr>
+            <td class="pkg-name">fastapi</td>
+            <td class="ver-constraint">>=0.124.1</td>
+            <td class="reason">ADK Web Server 用。Starlette 互換性</td>
+          </tr>
+          <tr>
+            <td class="pkg-name">pydantic</td>
+            <td class="ver-constraint">>=2.12</td>
+            <td class="reason">モデルバリデーション。v2 の Workflow 設定に必須</td>
+          </tr>
+          <tr>
+            <td class="pkg-name">graphviz</td>
+            <td class="ver-constraint">>=0.20.2</td>
+            <td class="reason">Workflow グラフの可視化（オプション）</td>
+          </tr>
+          <tr>
+            <td class="pkg-name">opentelemetry-api</td>
+            <td class="ver-constraint">>=1.36</td>
+            <td class="reason">トレーシング・計装のためのテレメトリ基盤</td>
+          </tr>
+          <tr>
+            <td class="pkg-name">opentelemetry-sdk</td>
+            <td class="ver-constraint">>=1.36</td>
+            <td class="reason">テレメトリ SDK。api と同一バージョンが必要</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
@@ -819,56 +1242,56 @@ root_agent = <span class="new">Workflow</span>(
 <script>
 // ===== Pattern Data =====
 const patterns = [
-  { level: 1, name: 'Single Agent', dir: '01_single_agent', usecase: 'GCP ドキュメント Q&A', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#3b82f6', effort: '—',
+  { level: 1, name: 'Single Agent', dir: '01_single_agent', usecase: 'GCP ドキュメント Q&A', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#3b82f6', effort: '—', impact: '🟢 なし',
     v1Desc: 'LlmAgent 単体。ツール定義と instruction で動作。', v2Desc: 'v2 でも同じ。LlmAgent は変更なし。',
     v1Arch: 'LlmAgent\n  ├── tools: [search, calc]\n  └── instruction: "..."', v2Arch: '（同一）' },
-  { level: 2, name: 'ReAct Pattern', dir: '02_react_pattern', usecase: '技術調査（Thought/Action/Obs）', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#3b82f6', effort: '—',
+  { level: 2, name: 'ReAct Pattern', dir: '02_react_pattern', usecase: '技術調査（Thought/Action/Obs）', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#3b82f6', effort: '—', impact: '🟢 なし',
     v1Desc: 'LlmAgent + ReAct プロンプト。思考プロセスを可視化。', v2Desc: '変更なし。LlmAgent ベース。',
     v1Arch: 'LlmAgent\n  ├── tools: [...]\n  └── instruction: "Think step by step..."', v2Arch: '（同一）' },
-  { level: 3, name: 'Sequential', dir: '03_sequential', usecase: 'ETL データパイプライン', v1Class: 'SequentialAgent', v2Syntax: 'チェーンタプル', rootType: 'Workflow', changed: true, color: '#3b82f6', effort: '中',
+  { level: 3, name: 'Sequential', dir: '03_sequential', usecase: 'ETL データパイプライン', v1Class: 'SequentialAgent', v2Syntax: 'チェーンタプル', rootType: 'Workflow', changed: true, color: '#3b82f6', effort: '中', impact: '🟡 中',
     v1Desc: 'SequentialAgent が sub_agents をリスト順に実行。output_key でデータ受け渡し。',
     v2Desc: 'Workflow のチェーンタプルで直列実行を宣言。("START", a, b, c) でエッジが自動生成。',
     v1Arch: 'SequentialAgent: etl_pipeline\n  ├── [1] extract_agent\n  ├── [2] transform_agent\n  └── [3] load_agent',
     v2Arch: 'Workflow: etl_pipeline\n  edges: [("START", extract, transform, load)]\n  graph: START→extract→transform→load→END' },
-  { level: 4, name: 'Parallel', dir: '04_parallel', usecase: 'マルチソース AI ニュース集約', v1Class: 'ParallelAgent', v2Syntax: 'ネストタプル', rootType: 'Workflow', changed: true, color: '#a855f7', effort: '中',
+  { level: 4, name: 'Parallel', dir: '04_parallel', usecase: 'マルチソース AI ニュース集約', v1Class: 'ParallelAgent', v2Syntax: 'ネストタプル', rootType: 'Workflow', changed: true, color: '#a855f7', effort: '中', impact: '🟡 中',
     v1Desc: 'ParallelAgent が sub_agents を同時並行で実行。各エージェントに異なる output_key が必須。',
     v2Desc: 'ネストタプル (a, b, c) で fan-out、次のノードで fan-in。output_key のルールは同じ。',
     v1Arch: 'ParallelAgent: multi_source\n  ├── web_researcher  (output_key: web)\n  ├── tech_researcher (output_key: tech)\n  └── fin_researcher  (output_key: fin)',
     v2Arch: 'Workflow: multi_source\n  edges: [("START", (web, tech, fin), aggregator)]\n  graph: START→[web|tech|fin]→aggregator→END' },
-  { level: 5, name: 'Loop', dir: '05_loop', usecase: 'コード生成 & テストループ', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大',
+  { level: 5, name: 'Loop', dir: '05_loop', usecase: 'コード生成 & テストループ', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大', impact: '🔴 大',
     v1Desc: 'LoopAgent が sub_agents を max_iterations まで繰り返し実行。テキストシグナルで終了判定。',
     v2Desc: 'dict エッジで条件分岐。{"FAIL": generator} でループバック、それ以外は END へ。無条件サイクル禁止。',
     v1Arch: 'LoopAgent: code_gen (max_iterations=5)\n  ├── [1] code_generator\n  └── [2] code_tester\n  （テキストに "PASS" があれば終了）',
     v2Arch: 'Workflow: code_gen\n  edges: [("START", generator, tester, {"FAIL": generator})]\n  graph: START→generator→tester→{FAIL:generator | *:END}' },
-  { level: 6, name: 'Review & Critique', dir: '06_review_critique', usecase: 'ブログ記事品質保証', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大',
+  { level: 6, name: 'Review & Critique', dir: '06_review_critique', usecase: 'ブログ記事品質保証', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大', impact: '🔴 大',
     v1Desc: 'LoopAgent で Generator → Critic のサイクル。Critic が [APPROVED] を出すまで反復。',
     v2Desc: '条件付きエッジ {"NEEDS_REVISION": generator} でサイクル。[APPROVED] なら END。',
     v1Arch: 'LoopAgent: blog_review (max=4)\n  ├── [1] blog_generator\n  └── [2] blog_critic\n  （"APPROVED" で終了）',
     v2Arch: 'Workflow: blog_review\n  edges: [("START", generator, critic,\n          {"NEEDS_REVISION": generator})]' },
-  { level: 7, name: 'Iterative Refinement', dir: '07_iterative_refinement', usecase: '技術ドキュメント自己改善', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大',
+  { level: 7, name: 'Iterative Refinement', dir: '07_iterative_refinement', usecase: '技術ドキュメント自己改善', v1Class: 'LoopAgent', v2Syntax: '条件付きサイクル', rootType: 'Workflow', changed: true, color: '#10b981', effort: '大', impact: '🔴 大',
     v1Desc: 'LoopAgent で1つの LlmAgent が自己評価・改善を繰り返す。スコアが閾値を超えたら終了。',
     v2Desc: '条件付きエッジ {"REVISE": doc_refiner} でサイクル。スコア ≥ 85 なら END。',
     v1Arch: 'LoopAgent: doc_refinement (max=5)\n  └── [1] doc_refiner\n  （スコア ≥ 85 で終了）',
     v2Arch: 'Workflow: doc_refinement\n  edges: [("START", doc_refiner,\n          {"REVISE": doc_refiner})]' },
-  { level: 8, name: 'Coordinator', dir: '08_coordinator', usecase: 'カスタマーサポートルーター', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#ec4899', effort: '—',
+  { level: 8, name: 'Coordinator', dir: '08_coordinator', usecase: 'カスタマーサポートルーター', v1Class: 'LlmAgent', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#ec4899', effort: '—', impact: '🟢 なし',
     v1Desc: 'LlmAgent がルーターとなり、sub_agents の専門エージェントに動的にルーティング。',
     v2Desc: '変更なし。LlmAgent + sub_agents のパターンは v2 でも同じ。',
     v1Arch: 'LlmAgent: coordinator\n  ├── billing_agent\n  ├── tech_support_agent\n  └── general_agent', v2Arch: '（同一）' },
-  { level: 9, name: 'Hierarchical', dir: '09_hierarchical', usecase: '競合分析（多層分解）', v1Class: 'LlmAgent 多層', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#ec4899', effort: '—',
+  { level: 9, name: 'Hierarchical', dir: '09_hierarchical', usecase: '競合分析（多層分解）', v1Class: 'LlmAgent 多層', v2Syntax: '変更なし', rootType: 'LlmAgent', changed: false, color: '#ec4899', effort: '—', impact: '🟢 なし',
     v1Desc: 'LlmAgent の多層構造。各レイヤーが sub_agents を持つ階層型。',
     v2Desc: '変更なし。LlmAgent の階層構造はそのまま。',
     v1Arch: 'LlmAgent: director\n  ├── LlmAgent: market_team\n  │   ├── market_researcher\n  │   └── market_analyst\n  └── LlmAgent: tech_team\n      └── tech_researcher', v2Arch: '（同一）' },
-  { level: 10, name: 'Swarm', dir: '10_swarm', usecase: '製品設計コンセンサス', v1Class: 'LoopAgent + Sequential', v2Syntax: 'チェーン + サイクル統合', rootType: 'Workflow', changed: true, color: '#f59e0b', effort: '大',
+  { level: 10, name: 'Swarm', dir: '10_swarm', usecase: '製品設計コンセンサス', v1Class: 'LoopAgent + Sequential', v2Syntax: 'チェーン + サイクル統合', rootType: 'Workflow', changed: true, color: '#f59e0b', effort: '大', impact: '🔴 大',
     v1Desc: 'SequentialAgent 内に LoopAgent をネスト。複数エキスパートが議論し、ファシリテーターが合意判定。',
     v2Desc: 'Workflow 1つでチェーン + 条件付きサイクルを統合。{"NEXT_ROUND": market_expert} で議論を継続。',
     v1Arch: 'SequentialAgent: swarm\n  ├── [1] LoopAgent: debate (max=3)\n  │   ├── market_expert\n  │   ├── tech_expert\n  │   ├── finance_expert\n  │   └── facilitator\n  └── [2] final_synthesizer',
     v2Arch: 'Workflow: swarm\n  edges: [("START",\n    market, tech, finance, facilitator,\n    {"NEXT_ROUND": market},\n    synthesizer)]' },
-  { level: 11, name: 'Human-in-the-Loop', dir: '11_human_in_the_loop', usecase: 'コンテンツ承認ワークフロー', v1Class: 'カスタム dict 制御', v2Syntax: 'チェーンタプル + callback', rootType: 'Workflow', changed: true, color: '#f59e0b', effort: '中',
+  { level: 11, name: 'Human-in-the-Loop', dir: '11_human_in_the_loop', usecase: 'コンテンツ承認ワークフロー', v1Class: 'カスタム dict 制御', v2Syntax: 'チェーンタプル + callback', rootType: 'Workflow', changed: true, color: '#f59e0b', effort: '中', impact: '🟡 中',
     v1Desc: 'demo.py が3つのエージェントを手動で段階実行。Confirm.ask() で人間レビュー。',
     v2Desc: 'Workflow チェーンタプルで宣言的に定義。before_agent_callback でレビューポイントを挿入。',
     v1Arch: 'Manual step execution:\n  [1] content_creator → 手動確認\n  [2] compliance_checker → 手動確認\n  [3] final_publisher',
     v2Arch: 'Workflow: content_approval\n  edges: [("START", creator, checker, publisher)]\n  before_agent_callback → skip_agent()' },
-  { level: '🏆', name: 'Capstone', dir: 'capstone', usecase: '全パターン統合 企業分析', v1Class: '全クラス統合', v2Syntax: 'Workflow 全構文統合', rootType: 'Workflow', changed: true, color: '#ef4444', effort: '特大',
+  { level: '🏆', name: 'Capstone', dir: 'capstone', usecase: '全パターン統合 企業分析', v1Class: '全クラス統合', v2Syntax: 'Workflow 全構文統合', rootType: 'Workflow', changed: true, color: '#ef4444', effort: '特大', impact: '🔴 大',
     v1Desc: 'Coordinator → SequentialAgent → ParallelAgent + LoopAgent の多重ネスト構造。',
     v2Desc: 'Workflow 1つに全構文を統合。Coordinator を edges の先頭ノードに配置（BaseNode 制約回避）。',
     v1Arch: 'LlmAgent: coordinator\n  └── SequentialAgent: pipeline\n      ├── ParallelAgent: gather\n      │   ├── web_researcher\n      │   ├── tech_researcher\n      │   └── finance_researcher\n      ├── analysis_agent\n      └── LoopAgent: review\n          ├── report_writer\n          └── report_critic',
@@ -915,6 +1338,7 @@ patterns.forEach((p, i) => {
 // ===== Render Comparison Table =====
 const tbody = document.querySelector('#comparisonTable tbody');
 patterns.forEach(p => {
+  const impactClass = p.impact.includes('大') ? 'impact-high' : p.impact.includes('中') ? 'impact-mid' : 'impact-none';
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><strong style="color:${p.color}">${p.level}</strong></td>
@@ -924,9 +1348,40 @@ patterns.forEach(p => {
     <td class="v2-cell"><code>${p.v2Syntax}</code></td>
     <td><code>${p.rootType}</code></td>
     <td>${p.effort}</td>
+    <td class="${impactClass}"><strong>${p.impact}</strong></td>
   `;
   tbody.appendChild(tr);
 });
+
+// ===== Render Impact Summary =====
+const impactSummaryEl = document.getElementById('impactSummary');
+if (impactSummaryEl) {
+  const high = patterns.filter(p => p.impact.includes('大')).length;
+  const mid = patterns.filter(p => p.impact.includes('中')).length;
+  const none = patterns.filter(p => p.impact.includes('なし')).length;
+  impactSummaryEl.innerHTML = `
+    <div class="api-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="api-card" style="text-align:center;">
+        <div style="font-size:2.5rem;">🔴</div>
+        <div style="font-size:2rem;font-weight:800;color:var(--accent-red);">${high}</div>
+        <div style="color:var(--text-muted);font-size:0.85rem;margin-top:4px;">影響度 大</div>
+        <div style="color:var(--text-secondary);font-size:0.8rem;margin-top:8px;">~8 ファイル / パターン</div>
+      </div>
+      <div class="api-card" style="text-align:center;">
+        <div style="font-size:2.5rem;">🟡</div>
+        <div style="font-size:2rem;font-weight:800;color:var(--accent-amber);">${mid}</div>
+        <div style="color:var(--text-muted);font-size:0.85rem;margin-top:4px;">影響度 中</div>
+        <div style="color:var(--text-secondary);font-size:0.8rem;margin-top:8px;">~20 ファイル / パターン</div>
+      </div>
+      <div class="api-card" style="text-align:center;">
+        <div style="font-size:2.5rem;">🟢</div>
+        <div style="font-size:2rem;font-weight:800;color:var(--accent-emerald);">${none}</div>
+        <div style="color:var(--text-muted);font-size:0.85rem;margin-top:4px;">影響なし</div>
+        <div style="color:var(--text-secondary);font-size:0.8rem;margin-top:8px;">6 ファイル（変更不要）</div>
+      </div>
+    </div>
+  `;
+}
 
 // ===== Scroll Animations =====
 const observer = new IntersectionObserver(entries => {
