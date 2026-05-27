@@ -48,3 +48,62 @@ root_agent = Workflow(edges=[
 - `LlmAgent(output_key="result")` はそのまま動作
 - Workflow のノード間データ受け渡しに `{variable_name}` 構文が使える
 - 並列実行されるエージェントには異なる output_key を使うこと
+
+## Agentic Pipeline（PGE パイプライン）の知見（2026-05-27）
+
+### Antigravity SDK の `LocalAgentConfig` 設定パターン
+```python
+config = LocalAgentConfig(
+    system_instructions="...",
+    response_schema=EvalResult,       # Pydantic モデルで構造化出力
+    policies=AgentPolicies(
+        allow_writes=True,            # ファイル書き込み許可
+        allow_commands=True,          # コマンド実行許可
+    ),
+    capabilities=AgentCapabilities(
+        code_execution=True,
+    ),
+    workspaces=[AgentWorkspace(
+        root=output_dir,
+        read_only=False,
+    )],
+)
+```
+- `response_schema` に Pydantic モデルを渡すと JSON 構造化出力が強制される
+- `allow_commands=True` で ruff/pytest のセルフチェックが可能に
+
+### `_StateProxy` パターン
+- BaseAgent 内では ToolContext が使えないため、`session.state` へのアクセスを模倣する辞書ラッパー
+- `InvocationContext.session.state` を直接読み書きし、ToolContext の `state["key"]` と同じインターフェースを提供
+
+### Generator の ruff セルフチェック
+- `allow_commands=True` + プロンプトで `ruff check .` → 修正 → `pytest` → 修正 → submit を指示
+- ❌ `ruff check --fix` は使用禁止
+- ✅ 手動修正を強制する理由: LLM が修正意図を理解してコード品質を向上させるため
+
+### Evaluator の `allow_writes=False`
+- Evaluator はコードを修正してはならない（評価のみ）
+- コード修正の責務は Generator に集約（責務分離）
+
+### `score_history` による改善停滞検出
+- 各イテレーションの Evaluator スコアを `score_history` リストに記録
+- 前回比改善幅 < `min_improvement` の場合、LLM verdict に関わらず APPROVED に変更
+- これ以上の反復は品質向上に寄与しないと判断して早期終了
+
+### リグレッションガード
+- 前回比でスコアが低下した場合、LLM が APPROVED と判定しても REVISE に強制上書き
+- コード品質の後退を防止する安全弁
+
+### 差分修正モード
+- `score >= 60` の場合、既存設計を維持し指摘点のみ修正するようプロンプトで指示
+- 全面的な再設計を禁止し、収束を促進
+
+### 相対インポート
+- `adk run` で実行するには、パッケージ内は相対インポート（`from .tools import ...`）を使う
+- `__init__.py` でプロジェクトルートを `sys.path` に追加して `shared` パッケージを解決
+```python
+# patterns/agentic_pipeline/__init__.py
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+```

@@ -12,6 +12,7 @@
 | [vertex-ai-adk-setup](./vertex-ai-adk-setup/SKILL.md) | Vertex AI + ADK セットアップ | 環境構築時 |
 | [adk-testing-debugging](./adk-testing-debugging/SKILL.md) | ADK API レベルのテスト・デバッグ | テスト実装時 |
 | [ai-agent-testing-strategy](./ai-agent-testing-strategy/SKILL.md) | テスト戦略の設計判断・非決定性対策 | テスト設計・パッケージ更新時 **必須** |
+| [agentic-pipeline](./agentic-pipeline/SKILL.md) | PGE 自律コード生成パイプラインの設計・実装ガイド | PGE パイプライン実装時 |
 
 ## 推奨する参照順序
 

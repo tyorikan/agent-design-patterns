@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     max_loop_iterations: int = 5
     agent_temperature: float = 0.1  # 一貫性重視
 
+    # PGE ループ設定
+    approval_threshold: int = 80  # Evaluator スコア閾値（0-100）
+    min_improvement: int = 5  # 改善停滞と判定する最低改善幅
+
+    # Antigravity SDK 設定（agentic_pipeline パターン用）
+    gemini_api_key: str | None = None  # Antigravity local harness に必須
+
     model_config = SettingsConfigDict(
         env_file=str(_PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
@@ -53,13 +60,14 @@ def _sync_env_vars(settings: Settings) -> None:
     反映しないため、ADK が必要とする変数を明示的にセットする。
     既に os.environ に値がある場合は上書きしない（明示的な export を優先）。
     """
-    env_mapping = {
+    env_mapping: dict[str, str | None] = {
         "GOOGLE_CLOUD_PROJECT": settings.google_cloud_project,
         "GOOGLE_CLOUD_LOCATION": settings.google_cloud_location,
         "GOOGLE_GENAI_USE_VERTEXAI": str(settings.google_genai_use_vertexai),
+        "GEMINI_API_KEY": settings.gemini_api_key,
     }
     for key, value in env_mapping.items():
-        if key not in os.environ:
+        if key not in os.environ and value is not None:
             os.environ[key] = value
 
 

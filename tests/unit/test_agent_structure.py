@@ -306,3 +306,86 @@ class TestCapstoneStructure:
         """レポート改善の条件付きサイクルエッジがある。"""
         cycle_edges = [e for e in self.mod.root_agent.graph.edges if e.route is not None]
         assert len(cycle_edges) > 0
+
+
+# =====================================================
+# Agentic Pipeline (BaseAgent + Antigravity, PGE ループ)
+# =====================================================
+class TestAgenticPipelineStructure:
+    def setup_method(self):
+        self.mod = load_pattern_agent("agentic_pipeline")
+
+    def test_root_agent_is_base_agent(self):
+        """root_agent は BaseAgent（PGEOrchestrator）。"""
+        assert not isinstance(self.mod.root_agent, Workflow)
+        assert not isinstance(self.mod.root_agent, LlmAgent)
+
+    def test_root_agent_name(self):
+        assert self.mod.root_agent.name == "agentic_pipeline"
+
+    def test_root_agent_is_pge_orchestrator(self):
+        """PGEOrchestrator クラスのインスタンスである。"""
+        from patterns.agentic_pipeline.agent import PGEOrchestrator
+        # モジュール二重ロード問題を回避
+        assert type(self.mod.root_agent).__name__ == "PGEOrchestrator"
+
+    def test_max_iterations_defined(self):
+        """MAX_ITERATIONS が定義されている。"""
+        assert hasattr(self.mod, "MAX_ITERATIONS")
+        assert self.mod.MAX_ITERATIONS >= 3
+
+    def test_schemas_are_valid(self):
+        """Pydantic スキーマが正しく定義されている。"""
+        from patterns.agentic_pipeline.schemas import (
+            ArtifactOutput,
+            EvaluationOutput,
+            Issue,
+            PlanOutput,
+            Severity,
+        )
+
+        # 有効なデータで検証
+        plan = PlanOutput(
+            architecture="クリーンアーキテクチャ",
+            modules=["main.py", "models.py"],
+            test_strategy="pytest で主要機能をカバー",
+            directory_structure="src/\n  main.py\n  models.py",
+        )
+        assert len(plan.modules) == 2
+
+        artifact = ArtifactOutput(
+            files_created=["main.py", "tests/test_main.py"],
+            summary="REST API を実装",
+        )
+        assert len(artifact.files_created) == 2
+
+        evaluation = EvaluationOutput(
+            score=85,
+            test_result="5 passed",
+            lint_result="0 errors",
+            issues=[
+                Issue(
+                    severity=Severity.MEDIUM,
+                    description="docstring 不足",
+                    file="main.py",
+                    suggestion="関数に docstring を追加",
+                ),
+            ],
+            suggestions=["テストカバレッジを向上"],
+            verdict="APPROVED",
+            reasoning="品質基準クリア",
+        )
+        assert evaluation.score == 85
+        assert evaluation.verdict == "APPROVED"
+        assert evaluation.issues[0].severity == Severity.MEDIUM
+
+    def test_evaluator_prompt_builder(self):
+        """build_evaluator_system_prompt が反復情報を含む。"""
+        from patterns.agentic_pipeline.prompts import build_evaluator_system_prompt
+
+        prompt = build_evaluator_system_prompt(
+            iteration=2, max_iterations=3, score_history=[65],
+        )
+        assert "2/3" in prompt
+        assert "[65]" in prompt
+
