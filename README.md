@@ -87,6 +87,12 @@ LLM が動的にルーティング・タスク分解を行う。
 | Bonus | **Human-in-the-Loop** | `patterns/11_human_in_the_loop/` | コンテンツ承認ワークフロー | `Workflow` |
 | 🏆 | **Capstone** | `patterns/capstone/` | 全パターン統合 企業分析レポート | `Workflow` 全構文統合 |
 
+### 発展パターン（独立実装）
+
+| パターン | ディレクトリ | ユースケース | 技術スタック |
+|---------|------------|------------|------------|
+| **Agentic Pipeline** | `patterns/agentic_pipeline/` | PGE 自律コード生成パイプライン | ADK `BaseAgent` + Antigravity SDK |
+
 ## 🏗️ パターン選択フローチャート
 
 ```

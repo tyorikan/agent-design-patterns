@@ -37,3 +37,17 @@ htmlcov/
 .DS_Store
 Thumbs.db
 test_output.log
+
+# Lint / Test ツールキャッシュ
+.ruff_cache/
+.deepeval/
+
+# 認証キー（スキルドキュメント内で key.json ダウンロードを案内しているため）
+key.json
+*.key
+
+# Agentic Pipeline 出力（PGE ループで生成されたコード）
+patterns/agentic_pipeline/output/
+
+# ADK
+.adk/

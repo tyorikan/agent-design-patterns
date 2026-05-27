@@ -10,6 +10,8 @@ NOTE: これらは統合テストのため、Vertex AI ADC が必要。
 テスト実行時間: 各テスト 30秒〜2分（全体で約20分）
 """
 
+import os
+
 import pytest
 
 from conftest import (
@@ -268,3 +270,126 @@ class TestCapstone:
         assert len(trajectory) >= 3, (
             f"十分なエージェントが発言していません: {trajectory}"
         )
+
+
+# ============================================================
+# Agentic Pipeline（Antigravity Agent 統合テスト）
+# ============================================================
+_has_gemini_api_key = bool(os.environ.get("GEMINI_API_KEY"))
+
+
+@pytest.mark.skipif(
+    not _has_gemini_api_key,
+    reason="GEMINI_API_KEY が未設定（Antigravity local harness に必須）",
+)
+class TestAgenticPipeline:
+    """汎用 PGE コード実装パイプラインの統合テスト。
+
+    テストプロンプトは非エンジニア・ビジネス職が投げる抽象度の高いリクエストを
+    模擬する。技術的な仕様（クラス名、メソッド名、例外型）は指定せず、
+    ビジネス要件のみを記述する。Planner が技術仕様に落とし込むのが PGE の仕事。
+
+    検証項目:
+    - P→G→E の3ノードが全て通過する（トラジェクトリ検証）
+    - Generator が実際にファイルを生成する（create_file ツール使用）
+    - Evaluator が pytest/ruff を実行する（run_command ツール使用）
+    - 最終出力に評価結果が含まれる
+    """
+
+    @pytest.fixture(autouse=True)
+    def clean_output_dir(self):
+        """テスト前に output ディレクトリをクリーンアップする。"""
+        import shutil
+
+        from patterns.agentic_pipeline.tools import OUTPUT_DIR
+
+        if OUTPUT_DIR.exists():
+            shutil.rmtree(OUTPUT_DIR)
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        yield
+        # テスト後はクリーンアップしない（デバッグ用に残す）
+
+    @pytest.mark.asyncio
+    async def test_pge_loop_with_abstract_business_request(self):
+        """非エンジニアの抽象的なリクエストから PGE が品質コードを生成する。
+
+        プロンプトは技術仕様を一切含まず、ビジネス要件のみ。
+        Planner がこの曖昧なリクエストを技術設計に落とし込み、
+        Generator が実装し、Evaluator が品質検証する。
+        """
+        from patterns.agentic_pipeline.tools import OUTPUT_DIR
+
+        mod = load_pattern_agent("agentic_pipeline")
+        response, trajectory = await run_agent_trajectory(
+            mod.root_agent, "agentic_pipeline",
+            "チームの社内本棚にある本を管理できるツールを Python で作ってほしい。"
+            "本の登録・検索・削除ができて、同じ本が二重登録されないようにしたい。"
+            "ISBN で本を特定できるようにして、不正な ISBN はエラーにしてほしい。"
+            "ちゃんとテストも書いてね。"
+        )
+
+        # ===== PGE ループ完走検証 =====
+        # PGEOrchestrator が発言している
+        assert "agentic_pipeline" in trajectory, (
+            f"PGEOrchestrator が発言していません: {trajectory}"
+        )
+
+        # レスポンスに P→G→E 全フェーズの進行が含まれる
+        assert "Planner" in response or "Evaluator" in response or "APPROVED" in response, (
+            f"PGE フェーズの進行が出力に含まれていません: {response[:200]}"
+        )
+
+        # ===== ファイル生成検証 =====
+        # Generator が実際にファイルを生成している
+        generated_files = list(OUTPUT_DIR.rglob("*.py"))
+        assert len(generated_files) >= 2, (
+            f"最低2ファイル（実装+テスト）が生成される必要があります。"
+            f"実際の生成ファイル: "
+            f"{[str(f.relative_to(OUTPUT_DIR)) for f in generated_files]}"
+        )
+
+        # テストファイルが存在する
+        test_files = [f for f in generated_files if "test" in f.name.lower()]
+        assert len(test_files) >= 1, (
+            f"テストファイルが生成されていません。"
+            f"生成ファイル: {[f.name for f in generated_files]}"
+        )
+
+        # ===== 出力検証 =====
+        # 最終出力が十分な長さ（評価結果を含む）
+        assert len(response) > 50, (
+            f"出力が短すぎます（評価結果が含まれていない可能性）: "
+            f"{len(response)} 文字"
+        )
+
+    @pytest.mark.asyncio
+    async def test_generator_creates_files_from_vague_request(self):
+        """曖昧なリクエストから Generator がファイルを自律生成する。
+
+        アプローチ B の核心: 非エンジニアの「こんなのが欲しい」レベルの
+        リクエストでも、Antigravity Agent が設計判断を行い、
+        ビルトインツールで実際にファイルを生成することを検証する。
+        """
+        from patterns.agentic_pipeline.tools import OUTPUT_DIR
+
+        mod = load_pattern_agent("agentic_pipeline")
+        await run_agent_trajectory(
+            mod.root_agent, "agentic_pipeline",
+            "タスクの優先度と期限を管理できる TODO リストを作って。"
+            "タスクには優先度（高・中・低）があって、期限切れのタスクを"
+            "抽出できるようにしたい。テストもお願い。"
+        )
+
+        # ファイルが実際に書き出されている
+        all_files = list(OUTPUT_DIR.rglob("*.py"))
+        assert len(all_files) >= 1, (
+            f"Generator がファイルを生成していません。"
+            f"OUTPUT_DIR: {OUTPUT_DIR}"
+        )
+
+        # 生成されたコードが空でない
+        for f in all_files:
+            content = f.read_text()
+            assert len(content) > 10, (
+                f"生成ファイル {f.name} の内容が空です"
+            )

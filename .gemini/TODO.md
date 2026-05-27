@@ -6,6 +6,8 @@
 - [x] skills/a2a-protocol/SKILL.md - A2A プロトコルスキル
 - [x] skills/vertex-ai-adk-setup/SKILL.md - Vertex AI セットアップスキル
 - [x] skills/adk-testing-debugging/SKILL.md - テスト・デバッグスキル
+- [x] skills/agentic-pipeline/SKILL.md - PGE 自律コード生成パイプラインスキル
+- [x] skills/ai-agent-testing-strategy/SKILL.md - AI エージェントテスト戦略スキル
 
 ## プロジェクト基盤
 - [x] pyproject.toml の作成
@@ -54,6 +56,8 @@
 - [x] CONTRIBUTING.md の作成
 - [x] .gemini/DESIGN.md の最新化
 - [x] 全ドキュメントのテスト再構築対応更新
+- [x] docs/v1-to-v2-migration-guide.md 作成
+- [x] ドキュメント包括的アップデート（REQUIREMENTS.md, DESIGN.md, TODO.md, TIPS.md）
 
 ## ADK v2 移行（v2 ブランチ）
 - [x] google-adk>=2.1.0, google-genai>=1.72.0 にアップグレード
@@ -68,3 +72,9 @@
 - [x] 各パターン README.md の v2 更新
 - [x] プロジェクト README.md の v2 更新
 - [x] .agents/skills/*.md の v2 更新
+
+## Agentic Pipeline（PGE 自律コード生成パイプライン）
+- [x] agentic_pipeline の設計（agent.py, tools.py, prompts.py, schemas.py）
+- [x] agentic_pipeline の実装完了
+- [x] agentic_pipeline のテスト完了
+- [x] config.py PGE 設定拡張（approval_threshold, min_improvement, gemini_api_key）

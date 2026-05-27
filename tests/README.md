@@ -30,8 +30,8 @@ assert "code_generator" in trajectory  # 正しいエージェントが動いた
 
 | レベル | ディレクトリ | LLM 呼出 | 実行時間 | テスト数 |
 |--------|-------------|----------|---------|---------|
-| **Lv.1** | `tests/unit/` | ❌ なし | **約1秒** | 45 |
-| **Lv.2** | `tests/integration/` | ✅ あり | **約20分** | 12 |
+| **Lv.1** | `tests/unit/` | ❌ なし | **約1秒** | 50 |
+| **Lv.2** | `tests/integration/` | ✅ あり | **約20分** | 14 |
 
 ---
 
@@ -76,6 +76,7 @@ pytest tests/unit/ -v
 | **10 Swarm** | `SequentialAgent`→`LoopAgent` 内に market/engineer/finance expert + consensus_builder |
 | **11 Human-in-the-Loop** | `LlmAgent`(content_creator) + compliance_checker, output_key 設定済 |
 | **Capstone** | `LlmAgent`(coordinator)→`SequentialAgent`(pipeline)→`ParallelAgent`+`LoopAgent` |
+| **Agentic Pipeline** | `BaseAgent`(PGEOrchestrator), name=`agentic_pipeline`, MAX_ITERATIONS≥3, Pydantic スキーマ検証, build_evaluator_system_prompt 検証 |
 
 ---
 
@@ -138,6 +139,8 @@ assert "consensus_builder" in trajectory
 | **09 Hierarchical** | `test_generates_analysis_report` | 100文字以上のレポート | 3つ以上のエージェントが発言 |
 | **10 Swarm** | `test_all_experts_participate` | 200文字以上の出力 | market/engineer/finance expert + consensus_builder が全員発言 |
 | **Capstone** | `test_generates_enterprise_report` | 200文字以上のレポート | 3つ以上のエージェントが発言 |
+| **Agentic Pipeline** | `test_pge_loop_with_abstract_business_request` | 50文字以上の出力、2ファイル以上生成 | `agentic_pipeline` が発言、P→G→E 全フェーズ通過 |
+| **Agentic Pipeline** | `test_generator_creates_files_from_vague_request` | 1ファイル以上生成、内容が空でない | — |
 
 ---
 

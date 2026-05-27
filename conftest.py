@@ -32,8 +32,8 @@ if env_file.exists():
 def load_pattern_agent(pattern_dir: str) -> ModuleType:
     """パターンの agent.py を安全にロードする。
 
-    importlib.util.spec_from_file_location を使い、
-    sys.modules のキャッシュ汚染を回避する。
+    パッケージとして正しくインポートすることで、
+    相対インポート（from .tools import ...）を解決可能にする。
 
     Args:
         pattern_dir: パターンディレクトリ名（例: "01_single_agent"）
@@ -41,13 +41,8 @@ def load_pattern_agent(pattern_dir: str) -> ModuleType:
     Returns:
         ロードされたモジュール（mod.root_agent でエージェントにアクセス可能）
     """
-    agent_path = ROOT / "patterns" / pattern_dir / "agent.py"
-    module_name = f"agent_{pattern_dir}"
-
-    spec = importlib.util.spec_from_file_location(module_name, agent_path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    module_path = f"patterns.{pattern_dir}.agent"
+    return importlib.import_module(module_path)
 
 
 # =====================================================
