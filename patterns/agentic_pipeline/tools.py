@@ -75,15 +75,39 @@ def _build_config(
     # ポリシー構築: コマンド実行の許可/拒否を制御
     policies = []
     if allow_commands:
-        # pytest / ruff のみ実行を許可（--fix は禁止: 修正は Generator の責務）
+        # テスト・lint・ビルド・起動検証のコマンド実行を許可
+        # ファイル変更系（--fix, install -g）は禁止: 修正は Generator の責務
+        _BLOCKED_SUBCOMMANDS = ("--fix", "install -g", "rm ", "sudo ")
+        _ALLOWED_PREFIXES = (
+            # テスト・lint
+            "pytest", "python -m pytest", "ruff check",
+            # Python
+            "python ", "pip install", "pip check",
+            # Docker / Podman
+            "docker build", "docker compose", "docker run",
+            "podman build", "podman-compose", "podman run",
+            # Node.js
+            "npm run", "npm test", "npm start", "npx ",
+            "node ", "yarn ", "pnpm ",
+            # Go
+            "go build", "go test", "go vet", "go run",
+            # Make / Shell
+            "make", "sh ", "bash ", "cat ", "head ", "tail ",
+            "ls ", "find ", "wc ", "grep ",
+            # Terraform / IaC
+            "terraform validate", "terraform plan", "terraform fmt",
+            # Misc
+            "curl ", "java ", "javac ", "mvn ", "gradle ",
+        )
         policies.append(
             policy.allow(
                 "run_command",
                 when=lambda args: (
-                    args.get("CommandLine", "").startswith(
-                        ("pytest", "ruff check", "python -m pytest")
+                    args.get("CommandLine", "").startswith(_ALLOWED_PREFIXES)
+                    and not any(
+                        sub in args.get("CommandLine", "")
+                        for sub in _BLOCKED_SUBCOMMANDS
                     )
-                    and "--fix" not in args.get("CommandLine", "")
                 ),
             )
         )
@@ -211,8 +235,19 @@ async def run_generator_agent(
     )
 
     # 既存ファイルがある場合（2回目以降 or 既存プロジェクト改修）は差分修正モード
-    existing_files = list(resolved_dir.rglob("*.py"))
-    existing_files = [f for f in existing_files if "__pycache__" not in str(f)]
+    _SOURCE_EXTENSIONS = {
+        ".py", ".ts", ".tsx", ".js", ".jsx", ".css", ".scss",
+        ".html", ".json", ".yaml", ".yml", ".toml", ".md",
+        ".tf", ".hcl", ".go", ".rs", ".java",
+    }
+    existing_files = [
+        f for f in resolved_dir.rglob("*")
+        if f.is_file()
+        and f.suffix in _SOURCE_EXTENSIONS
+        and "__pycache__" not in str(f)
+        and "node_modules" not in str(f)
+        and ".next" not in str(f)
+    ]
 
     prompt = (
         f"以下の設計方針に基づいてコードを実装してください。\n\n"
@@ -233,6 +268,7 @@ async def run_generator_agent(
         for f in sorted(existing_files):
             rel = f.relative_to(resolved_dir)
             prompt += f"- {rel}\n"
+
 
         # Evaluator フィードバックを明示的に含める
         feedback = tool_context.state.get("evaluator_feedback", "")
@@ -298,8 +334,18 @@ async def run_evaluator_agent(
         f"## 設計方針\n{plan}\n\n"
         f"## 生成されたコード情報\n{artifact}\n\n"
         f"## 出力ディレクトリ\n{output_dir}\n\n"
-        f"上記ディレクトリで pytest と ruff check を実行し、"
-        f"コードの品質を評価・スコアリングしてください。"
+        f"上記ディレクトリに対して、以下の検証をすべて実行してください:\n\n"
+        f"1. `ls -R {output_dir}` でファイル一覧を確認し、設計方針の全モジュールが揃っているか検証\n"
+        f"2. Python ファイルがあれば `python -c \"import ...\"` で import エラーがないか確認\n"
+        f"3. Dockerfile / docker-compose.yml / podman-compose.yml があれば "
+        f"ビルド・起動テストを実行\n"
+        f"4. requirements.txt があれば `pip install -r requirements.txt` で "
+        f"依存関係を確認\n"
+        f"5. `python -m pytest` でテストを実行\n"
+        f"6. `ruff check .` でコード品質を確認\n"
+        f"7. コードを読み、設計品質をレビュー\n\n"
+        f"すべての検証結果に基づいてスコアリングし、verdict を判定してください。\n"
+        f"**動かないコードは 0 点です。**"
     )
 
     logger.info("Evaluator: レビュー開始（反復 %d/%d）", iteration, max_iterations)

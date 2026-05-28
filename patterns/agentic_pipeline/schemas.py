@@ -74,6 +74,10 @@ class EvaluationOutput(BaseModel):
     lint_result: str = Field(
         description="ruff 実行結果のサマリー（エラー数・警告数）"
     )
+    execution_result: str = Field(
+        default="",
+        description="ビルド・起動テストの結果サマリー（import チェック、docker build 等）"
+    )
     issues: list[Issue] = Field(
         description="検出された品質問題のリスト（重大度付き）"
     )
