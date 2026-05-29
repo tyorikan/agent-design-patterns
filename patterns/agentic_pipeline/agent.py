@@ -378,8 +378,17 @@ class PGEOrchestrator(BaseAgent):
 
     async def _run_async_impl(self, ctx: InvocationContext):
         """PGE ループを制御する。"""
-        state = ctx.session.state
-        tool_context = _StateProxy(state)
+        session_state = ctx.session.state
+
+        # PGE ループ内の中間データはローカル dict で管理する。
+        # session state に直接書き込むと SQLite の update_time が進み、
+        # 次の Event yield 時に stale session エラーが発生するため。
+        local_state: dict = {}
+        # session state から初期値をコピー（output_dir 等）
+        for key in ("output_dir",):
+            if key in session_state:
+                local_state[key] = session_state[key]
+        tool_context = _StateProxy(local_state)
 
         # ユーザーメッセージを session events から取得
         user_request = ""
@@ -393,8 +402,8 @@ class PGEOrchestrator(BaseAgent):
                 if texts:
                     user_request = "\n".join(texts)
                     break
-        state["user_request"] = user_request
-        output_dir_str = state.get("output_dir", "")
+        local_state["user_request"] = user_request
+        output_dir_str = local_state.get("output_dir", "")
         output_dir = Path(output_dir_str).resolve() if output_dir_str else DEFAULT_OUTPUT_DIR
         logger.info(
             "PGE Orchestrator: user_request=%s, output_dir=%s",
@@ -424,10 +433,10 @@ class PGEOrchestrator(BaseAgent):
             )
 
             plan = await run_planner_agent(
-                user_request=state.get("user_request", ""),
+                user_request=local_state.get("user_request", ""),
                 tool_context=tool_context,
             )
-            state["plan"] = plan
+            local_state["plan"] = plan
 
             # Planner 完了サマリー
             plan_summary = _summarize_plan(plan)
@@ -456,7 +465,7 @@ class PGEOrchestrator(BaseAgent):
                 plan=plan,
                 tool_context=tool_context,
             )
-            state["artifact"] = artifact
+            local_state["artifact"] = artifact
 
             # Generator 完了サマリー
             gen_summary = _summarize_artifact(artifact)
@@ -486,7 +495,7 @@ class PGEOrchestrator(BaseAgent):
                 artifact=artifact,
                 tool_context=tool_context,
             )
-            state["evaluator_feedback"] = result_text
+            local_state["evaluator_feedback"] = result_text
 
             # --- Verdict 判定 ---
             if result_text.startswith("APPROVED"):
