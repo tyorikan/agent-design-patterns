@@ -1,10 +1,10 @@
 # Agentic Pipeline
 
-> **BaseAgent (PGEOrchestrator) + Antigravity Agent** による Planner-Generator-Evaluator 3者間自律コード実装パイプライン
+> **BaseAgent (PGEOrchestrator) + LlmAgent (Claude) + Antigravity Agent** による Planner-Generator-Evaluator 3者間自律コード実装パイプライン
 
 ## 概要
 
-BaseAgent（PGEOrchestrator）でループ制御を行い、各ノードの内部処理を Antigravity Agent（自律エージェント）に委任するハイブリッドパターン。
+BaseAgent（PGEOrchestrator）でループ制御を行い、Planner には LlmAgent（Claude Opus 4.8 via Vertex AI）、Generator / Evaluator には Antigravity Agent（自律エージェント）を使用するハイブリッドパターン。
 
 > [!NOTE]
 > ADK Workflow の条件付きエッジは ADK v2 に実装されているが、PGE パイプラインの複雑なループ制御（スコア履歴管理、リグレッションガード、改善停滞検出、ブロッカー判定など）には不十分だったため、BaseAgent を採用した。
@@ -22,20 +22,20 @@ agentic_pipeline = Sequential(03) + Review&Critique(06) + Hierarchical(09)
 |------------|------------|
 | **03 Sequential** | P → G → E の直列パイプライン |
 | **06 Review & Critique** | E → P フィードバックループ |
-| **09 Hierarchical** | BaseAgent が Antigravity Agent を管理 |
+| **09 Hierarchical** | BaseAgent が各エージェントを管理 |
 
 ## アーキテクチャ
 
 ```mermaid
 graph TD
-    START["START"] --> P["Planner<br/>(Antigravity Agent)<br/>view_file, list_dir, grep"]
+    START["START"] --> P["Planner<br/>(LlmAgent — Claude Opus 4.8)<br/>read_file, list_directory"]
     P --> G["Generator<br/>(Antigravity Agent)<br/>create_file, edit_file, run_command"]
     G --> E["Evaluator<br/>(Antigravity Agent)<br/>run_command, view_file"]
     E -->|REVISE| P
     E -->|APPROVED| SUMMARY["📋 変更サマリー<br/>(Markdown)"]
     SUMMARY --> END["END"]
 
-    style P fill:#4285F4,color:#fff
+    style P fill:#AB47BC,color:#fff
     style G fill:#0F9D58,color:#fff
     style E fill:#F4B400,color:#000
     style SUMMARY fill:#9E9E9E,color:#fff
@@ -45,21 +45,23 @@ graph TD
 
 ```
 PGEOrchestrator (BaseAgent — ループ制御 + Markdown 出力)
-├── run_planner_agent()   → Antigravity Agent (設計方針策定)
+├── run_planner_agent()   → LlmAgent (Claude Opus 4.8 via Vertex AI)
 ├── run_generator_agent() → Antigravity Agent (コード実装)
 └── run_evaluator_agent() → Antigravity Agent (品質評価)
 ```
 
-### アプローチ: Antigravity Agent に自律性を委任
+### アプローチ: モデル適材適所
 
-各 Antigravity Agent はビルトインツールを使って**自律的に行動**する。
-PGEOrchestrator は交通整理（P→G→E→REVISE）とスコア管理のみ。
+Planner は自律性（コマンド実行・ファイル書き込み）が不要なため、Antigravity Agent のオーバーヘッド（WebSocket、ハーネス起動）を排除し、LlmAgent + Claude Opus 4.8 を採用。Generator / Evaluator は自律性が必須なため Antigravity Agent のまま。
 
-| エージェント | 役割 | ツール | コマンド実行 |
-|------------|------|--------|------------|
-| **Planner** | ソフトウェアアーキテクト + UI/UX 設計 | `view_file`, `list_dir`, `grep_search` | ❌ 不可 |
-| **Generator** | ソフトウェアエンジニア | `create_file`, `edit_file`, `view_file`, `run_command` | ✅ セルフチェック用 |
-| **Evaluator** | QA エンジニア + セキュリティアナリスト | `run_command`, `view_file`, `list_dir`, `grep_search` | ✅ テスト・ビルド検証 |
+| エージェント | 実装 | モデル | 役割 | ツール | コマンド実行 |
+|------------|------|--------|------|--------|------------|
+| **Planner** | LlmAgent (ADK) | Claude Opus 4.8 (Vertex AI) | ソフトウェアアーキテクト + UI/UX 設計 | `read_file`, `list_directory` | ❌ 不可 |
+| **Generator** | Antigravity Agent | Gemini | ソフトウェアエンジニア | `create_file`, `edit_file`, `view_file`, `run_command` | ✅ セルフチェック用 |
+| **Evaluator** | Antigravity Agent | Gemini | QA エンジニア + セキュリティアナリスト | `run_command`, `view_file`, `list_dir`, `grep_search` | ✅ テスト・ビルド検証 |
+
+> [!TIP]
+> **Planner の Function Calling**: 既存プロジェクト改修時、Planner は `list_directory` → `read_file` で自律的にファイルを探索し、既存のコード構造・設計パターン・命名規則を理解した上で設計方針を策定する。新規プロジェクトの場合はツールなし（純粋推論のみ）。
 
 > [!TIP]
 > Generator の `run_command` は **セルフチェック用** に許可されている。
@@ -83,7 +85,7 @@ PGEOrchestrator は交通整理（P→G→E→REVISE）とスコア管理のみ�
 ### スコアリング（0-100）
 
 | カテゴリ | 配点 | CRITICAL となるケース |
-|---------|------|--------------------|
+|---------|------|------------------|
 | 実行可能性 | 25 | ビルド失敗、import エラー |
 | テスト合格率 | 20 | — |
 | コード品質 | 20 | — |
@@ -179,12 +181,14 @@ score=85. pytest 20/20 passed, ruff 0 errors...
 
 - Python 3.12+
 - `google-adk` (ADK v2) + `google-antigravity` (Antigravity SDK)
+- `anthropic[vertex]`（Planner の Claude Opus 4.8 に必要）
 - `GEMINI_API_KEY`（Antigravity local harness に必須）
+- Google Cloud ADC 認証（Vertex AI 経由の Claude 呼び出しに必要）
 
 ### インストール
 
 ```bash
-pip install google-adk google-antigravity
+pip install google-adk google-antigravity "anthropic[vertex]>=0.43.0"
 ```
 
 ## 実行
@@ -226,7 +230,7 @@ python patterns/agentic_pipeline/demo.py
 patterns/agentic_pipeline/
 ├── __init__.py    # sys.path 設定 + Antigravity SDK ログフィルタ
 ├── agent.py       # PGEOrchestrator (BaseAgent) — ループ制御・Markdown 出力
-├── tools.py       # Antigravity Agent ラッパー（コマンドポリシー・ワークスペース設定）
+├── tools.py       # Planner (LlmAgent + Claude) + Antigravity Agent ラッパー
 ├── schemas.py     # Pydantic スキーマ（PlanOutput, ArtifactOutput, EvaluationOutput 等）
 ├── prompts.py     # 各エージェントのシステムプロンプト（技術スタック非依存）
 ├── demo.py        # デモ実行スクリプト
@@ -237,14 +241,32 @@ patterns/agentic_pipeline/
 ### スキーマ一覧
 
 | スキーマ | 用途 | 主要フィールド |
-|---------|------|--------------|
+|---------|------|--------------| 
 | `PlanOutput` | Planner の出力 | `architecture`, `modules`, `test_strategy`, `directory_structure` |
 | `ArtifactOutput` | Generator の出力 | `files_created`, `summary` |
 | `EvaluationOutput` | Evaluator の出力 | `verdict`, `score`, `issues`, `summary`, `execution_result` |
 | `Issue` | 評価で見つかった問題 | `severity`, `category`, `description`, `file`, `line`, `suggestion` |
 | `Severity` | 問題の深刻度 | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
 
+### Planner ツール
+
+| ツール | 用途 | 使用条件 |
+|--------|------|---------|
+| `read_file` | ファイル内容の読み取り（30,000 文字で自動トランケーション） | 既存プロジェクト改修時のみ |
+| `list_directory` | ディレクトリ一覧表示（`__pycache__`, `node_modules` 等自動除外） | 既存プロジェクト改修時のみ |
+
 ## 設計上の工夫
+
+### Planner: Claude Opus 4.8 (LlmAgent)
+
+Planner は自律性（コマンド実行、ファイル書き込み）が不要なため、Antigravity Agent のオーバーヘッドを排除し、ADK の LlmAgent + Claude Opus 4.8（Vertex AI Model Garden 経由）を採用。
+
+- **新規プロジェクト**: 純粋推論のみ（ツールなし）
+- **既存プロジェクト改修**: `read_file` / `list_directory` で自律的にファイル探索（Function Calling）
+- **マークダウンフェンス対策**: Claude が JSON を `` ```json ... ``` `` で囲む傾向があるため、`_strip_markdown_fences()` + `_extract_json()` で3層防御
+
+> [!NOTE]
+> Claude は ADK の `models/__init__.py` で lazy registration 済み。`model="claude-opus-4-8"` を指定するだけで Vertex AI 経由にルーティングされる。
 
 ### ログフィルタ（`__init__.py`）
 
@@ -271,6 +293,7 @@ PGE ループの中間データ（`plan`, `artifact`, `evaluator_feedback`）を
 | **ループ構造** | 2者間（G↔C） | **3者間（P→G→E→P）** |
 | **戻り先** | Generator | **Planner（再設計）** |
 | **各ノードの能力** | 1回の LLM 呼び出し | **自律ループ（推論+コード実行+検証）** |
+| **Planner モデル** | — | **Claude Opus 4.8（設計特化）** |
 | **ツール実行** | なし | **あり（pytest, ruff, docker, npm 等 30+）** |
 | **品質保証** | テキスト評価 | **ツールによる定量評価（5軸スコアリング）** |
 | **ブロッカー検出** | なし | **CRITICAL/HIGH 課題で強制 REVISE** |

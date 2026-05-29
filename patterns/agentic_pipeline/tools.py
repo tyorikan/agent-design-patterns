@@ -12,10 +12,12 @@ import logging
 import os
 from pathlib import Path
 
+from google.adk.tools import ToolContext
 from google.antigravity import Agent, CapabilitiesConfig, LocalAgentConfig
 from google.antigravity.hooks import policy
 from google.antigravity.types import GeminiConfig
-from google.adk.tools import ToolContext
+
+from shared.config import get_settings
 
 from .prompts import (
     GENERATOR_SYSTEM_PROMPT,
@@ -23,7 +25,6 @@ from .prompts import (
     build_evaluator_system_prompt,
 )
 from .schemas import ArtifactOutput, EvaluationOutput, PlanOutput
-from shared.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -131,53 +132,167 @@ def _build_config(
     return LocalAgentConfig(**config_kwargs)
 
 
+# ── Planner 用 FunctionTool ──────────────────────────────
+# Claude が既存プロジェクト改修時に自律的にファイルを探索するための軽量ツール。
+# Generator/Evaluator の Antigravity Agent と違い、コマンド実行やファイル書き込みは不要。
+
+# agent.py と共通の無視パターン
+_PLANNER_IGNORE_DIRS = {
+    "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache",
+    ".venv", "venv", ".tox", ".eggs",
+    "node_modules", ".next", ".nuxt", ".svelte-kit", ".turbo",
+    ".parcel-cache", ".cache",
+    "dist", "build", "out", "coverage",
+    ".git", ".adk",
+}
+
+
+def read_file(file_path: str) -> str:
+    """指定されたファイルの内容を読み取る。
+
+    Args:
+        file_path: 読み取るファイルのパス。
+
+    Returns:
+        ファイルの内容（テキスト）。
+    """
+    p = Path(file_path)
+    if not p.exists():
+        return f"Error: {file_path} が見つかりません"
+    if not p.is_file():
+        return f"Error: {file_path} はファイルではありません"
+    try:
+        content = p.read_text(encoding="utf-8", errors="replace")
+        # 巨大ファイルはトークン節約のため先頭のみ
+        max_chars = 30_000
+        if len(content) > max_chars:
+            return content[:max_chars] + f"\n\n... (truncated, {len(content)} chars total)"
+        return content
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def list_directory(directory_path: str) -> str:
+    """指定されたディレクトリの内容を一覧表示する。
+
+    Args:
+        directory_path: 一覧表示するディレクトリのパス。
+
+    Returns:
+        ディレクトリ内のファイルとサブディレクトリの一覧。
+    """
+    p = Path(directory_path)
+    if not p.exists():
+        return f"Error: {directory_path} が見つかりません"
+    if not p.is_dir():
+        return f"Error: {directory_path} はディレクトリではありません"
+    try:
+        entries = sorted(p.iterdir())
+    except PermissionError:
+        return f"Error: {directory_path} の読み取り権限がありません"
+    lines = []
+    for entry in entries:
+        if entry.name.startswith(".") or entry.name in _PLANNER_IGNORE_DIRS:
+            continue
+        prefix = "📁" if entry.is_dir() else "📄"
+        lines.append(f"{prefix} {entry.name}")
+    return "\n".join(lines) if lines else "(empty directory)"
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """マークダウンのコードフェンスを除去する。
+
+    Claude は JSON 出力を ```json ... ``` で囲む傾向がある。
+    ADK の output_schema (model_validate_json) はこれをパースできないため、
+    手動で除去する。
+    """
+    import re
+
+    stripped = text.strip()
+    # ```json ... ``` or ``` ... ``` パターンを除去
+    match = re.match(r"^```(?:json)?\s*\n(.*?)\n```\s*$", stripped, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return stripped
+
+
+def _extract_json(text: str) -> str:
+    """テキストから JSON オブジェクト部分を抽出する。
+
+    Claude が Function Calling 後に中間テキスト + JSON を返す場合、
+    テキスト部分を除去して JSON 部分のみを返す。
+
+    例: "設計方針を策定しました。\n\n{\"architecture\": ...}"
+    → '{"architecture": ...}'
+    """
+    stripped = text.strip()
+
+    # 既に valid JSON ならそのまま返す
+    try:
+        json.loads(stripped)
+        return stripped
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # テキスト中の最初の { から最後の } までを抽出
+    first_brace = stripped.find("{")
+    last_brace = stripped.rfind("}")
+    if first_brace != -1 and last_brace > first_brace:
+        candidate = stripped[first_brace:last_brace + 1]
+        try:
+            json.loads(candidate)
+            return candidate
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # 抽出できなければ元のテキストをそのまま返す
+    return stripped
+
 async def run_planner_agent(
     user_request: str,
     tool_context: ToolContext,
 ) -> str:
-    """Antigravity Agent を使ってソフトウェア設計方針を策定する。
+    """LlmAgent (Claude Opus 4.8 via Vertex AI) で設計方針を策定する。
 
-    初回はゼロから設計し、再設計時は evaluator_feedback を参照して
-    設計方針を根本的に見直す。
+    新規プロジェクトの場合は純粋な推論のみ。
+    既存プロジェクト改修時は read_file / list_directory ツールで
+    Claude が自律的に関連ファイルを探索して設計方針を策定する。
 
     Args:
         user_request: ユーザーの要件（例: "FastAPI で TODO アプリの REST API を実装"）
     """
+    from google.adk.agents import LlmAgent
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.genai import types
+
     feedback = tool_context.state.get("evaluator_feedback", "")
     score_history_raw = tool_context.state.get("score_history", "[]")
     score_history: list[int] = json.loads(score_history_raw)
     prev_score = score_history[-1] if score_history else 0
 
-    config = _build_config(
-        system_instructions=PLANNER_SYSTEM_PROMPT,
-        response_schema=PlanOutput,
-    )
-
     prompt = f"要件: {user_request}"
 
-    # 既存プロジェクトのコンテキスト（初回のみ）
+    # 既存プロジェクトの情報
     resolved_dir = _resolve_output_dir(tool_context)
-    existing_files = list(resolved_dir.rglob("*.py"))
-    existing_files = [f for f in existing_files if "__pycache__" not in str(f)]
-    if existing_files and not feedback:
+    has_existing_files = resolved_dir.exists() and any(
+        f for f in resolved_dir.iterdir()
+        if not f.name.startswith(".") and f.name not in _PLANNER_IGNORE_DIRS
+    )
+
+    if has_existing_files and not feedback:
+        # 初回かつ既存ファイルあり → Claude にツールで探索させる
         prompt += (
             f"\n\n## 既存プロジェクト情報\n"
             f"対象ディレクトリ: {resolved_dir}\n"
             f"**重要: これは既存プロジェクトへの機能追加・改修です。**\n"
-            f"既存のコード構造・設計パターン・命名規則を尊重し、\n"
-            f"既存コードとの整合性を保った設計方針を策定してください。\n\n"
-            f"### 既存ファイル一覧\n"
+            f"まず `list_directory` と `read_file` ツールで既存コードの構造と内容を確認し、\n"
+            f"既存のコード構造・設計パターン・命名規則を尊重した設計方針を策定してください。\n"
         )
-        for f in sorted(existing_files):
-            rel = f.relative_to(resolved_dir)
-            prompt += f"- {rel}\n"
-        logger.info(
-            "Planner: 既存プロジェクト改修モード（%d ファイル）", len(existing_files)
-        )
+        logger.info("Planner: 既存プロジェクト改修モード（Claude Function Calling）")
 
     if feedback:
         if prev_score >= 60:
-            # スコアが一定以上 → 既存設計を維持し、指摘点のみ修正
             prompt += (
                 f"\n\n## 前回の評価フィードバック（前回スコア: {prev_score}）\n"
                 f"**重要: 既存の設計・アーキテクチャは維持し、以下の指摘点のみを修正する設計変更を行ってください。**\n"
@@ -186,30 +301,95 @@ async def run_planner_agent(
             )
             logger.info("Planner: 差分修正モード（score=%d、既存設計維持）", prev_score)
         else:
-            # スコアが低い → 根本的に見直す
             prompt += (
                 f"\n\n## 前回の評価フィードバック（前回スコア: {prev_score}）\n"
                 f"設計に根本的な問題があります。アーキテクチャを見直してください。\n\n"
                 f"{feedback}"
             )
             logger.info("Planner: 再設計モード（score=%d、根本的見直し）", prev_score)
-    elif not existing_files:
+    elif not has_existing_files:
         logger.info("Planner: 初回設計モード（新規プロジェクト）")
 
-    async with Agent(config) as agent:
-        response = await agent.chat(prompt)
-        result = await response.structured_output()
+    # 既存プロジェクトがある場合はツールを提供
+    planner_tools: list = []
+    if has_existing_files:
+        planner_tools = [read_file, list_directory]
 
-    if result is None:
-        # structured_output が失敗した場合はテキストで返す
-        text = await response.text()
-        tool_context.state["plan"] = text
-        return text
+    # LlmAgent を構築（Claude は models/__init__.py で lazy registration 済み）
+    # NOTE: output_schema は使わない。Claude は JSON を ```json ... ``` で囲む傾向があり、
+    # ADK の model_validate_json() がパースに失敗するため、手動パースする。
+    planner = LlmAgent(
+        name="planner_claude",
+        model="claude-opus-4-8",
+        instruction=PLANNER_SYSTEM_PROMPT,
+        tools=planner_tools,
+        output_key="plan",
+    )
 
-    result_json = json.dumps(result, ensure_ascii=False)
-    tool_context.state["plan"] = result_json
+    # 独立した InMemorySessionService で 1 ショット実行
+    session_service = InMemorySessionService()
+    runner = Runner(
+        agent=planner,
+        app_name="pge_planner",
+        session_service=session_service,
+    )
+    session = await session_service.create_session(
+        app_name="pge_planner", user_id="pge",
+    )
+
+    result = ""
+    async for event in runner.run_async(
+        user_id="pge",
+        session_id=session.id,
+        new_message=types.Content(
+            role="user",
+            parts=[types.Part(text=prompt)],
+        ),
+    ):
+        # Claude が Function Calling する場合、中間テキスト（「確認します...」等）と
+        # 最終 JSON が別々の event で返る。最終応答のみを採用する。
+        if event.is_final_response() and event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text:
+                    result = part.text  # 上書き（最終応答のみ）
+
+    if not result:
+        # is_final_response() で取れない場合のフォールバック: 全テキストから JSON を抽出
+        all_text = ""
+        async for event in runner.run_async(
+            user_id="pge",
+            session_id=session.id,
+            new_message=types.Content(
+                role="user",
+                parts=[types.Part(text="上記の設計方針を JSON で出力してください。")],
+            ),
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        all_text += part.text
+        if all_text:
+            result = all_text
+
+    if not result:
+        logger.warning("Planner: Claude から応答なし。空文字列を返します。")
+
+    # Claude のマークダウンフェンスを除去して JSON を抽出
+    result = _strip_markdown_fences(result)
+
+    # 混在テキストから JSON 部分だけを抽出（中間テキスト + JSON の場合）
+    result = _extract_json(result)
+
+    # PlanOutput バリデーション（ログ用、失敗しても続行）
+    try:
+        PlanOutput.model_validate_json(result)
+        logger.info("Planner: PlanOutput バリデーション成功")
+    except Exception as e:
+        logger.warning("Planner: PlanOutput バリデーション失敗（続行）: %s", e)
+
+    tool_context.state["plan"] = result
     logger.info("Planner: 設計方針策定完了")
-    return result_json
+    return result
 
 
 async def run_generator_agent(
