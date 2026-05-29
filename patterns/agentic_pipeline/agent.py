@@ -231,42 +231,38 @@ def _build_file_summary(
     sections: list[str] = []
 
     # --- 1. コミットメッセージ風の要約 ---
-    sections.append("")
-    sections.append("📋 変更サマリー")
-    sections.append("")
+    sections.append("### 📋 変更サマリー\n")
 
     if user_request:
         # ユーザー要件の先頭 80 文字をタイトルに
         title = user_request.strip().split("\n")[0][:80]
-        sections.append(f"  feat: {title}")
-        sections.append("")
+        sections.append(f"**feat:** {title}\n")
 
     # 各ファイルの説明を抽出
     if created:
-        sections.append("  新規:")
+        sections.append("**新規:**\n")
         for p in created:
             desc = _extract_file_description(directory / p)
             desc_str = f" — {desc}" if desc else ""
-            sections.append(f"    {p}{desc_str}")
+            sections.append(f"- `{p}`{desc_str}")
     if modified:
-        sections.append("  変更:")
+        sections.append("\n**変更:**\n")
         for p in modified:
             desc = _extract_file_description(directory / p)
             desc_str = f" — {desc}" if desc else ""
-            sections.append(f"    {p}{desc_str}")
+            sections.append(f"- `{p}`{desc_str}")
     if deleted:
-        sections.append("  削除:")
+        sections.append("\n**削除:**\n")
         for p in deleted:
-            sections.append(f"    {p}")
+            sections.append(f"- `{p}`")
 
     # --- 2. tree 形式のファイル一覧 ---
-    sections.append("")
-    sections.append(f"📁 出力ディレクトリ: {directory}")
-    sections.append("")
+    sections.append(f"\n### 📁 出力ディレクトリ: `{directory}`\n")
 
     total_files = 0
     total_lines = 0
 
+    tree_lines: list[str] = []
     all_entries: list[tuple[str, str]] = []
     for p in created:
         all_entries.append((p, "✨ NEW"))
@@ -280,20 +276,23 @@ def _build_file_summary(
         is_last = i == len(all_entries) - 1
         prefix = "└── " if is_last else "├── "
         if status == "🗑️  DEL":
-            sections.append(f"  {prefix}{status} {path}")
+            tree_lines.append(f"{prefix}{status} {path}")
         else:
             filepath = directory / path
             lc = _count_lines(filepath)
             size = filepath.stat().st_size
-            sections.append(
-                f"  {prefix}{status} {path}  ({lc} lines, {size:,} bytes)"
+            tree_lines.append(
+                f"{prefix}{status} {path}  ({lc} lines, {size:,} bytes)"
             )
             total_lines += lc
         total_files += 1
 
-    sections.append("")
+    sections.append("```")
+    sections.extend(tree_lines)
+    sections.append("```")
+
     sections.append(
-        f"  合計: {len(created)} 新規, {len(modified)} 変更, "
+        f"\n> **合計:** {len(created)} 新規, {len(modified)} 変更, "
         f"{len(deleted)} 削除 ({total_files} files, {total_lines:,} lines)"
     )
 
@@ -301,60 +300,64 @@ def _build_file_summary(
 
 
 def _summarize_plan(plan_json: str) -> str:
-    """Planner 結果を人間向けに整形して全文出力する。"""
+    """Planner 結果を Markdown 形式で整形して出力する。
+
+    adk web (ngx-markdown) と adk run (ターミナル) の両方で読みやすくするため、
+    Markdown 記法で出力する。
+    """
     try:
         data = json.loads(plan_json)
     except (json.JSONDecodeError, TypeError):
-        return f"Planner 完了\n{plan_json}"
+        return f"Planner 完了\n\n{plan_json}"
 
     if not isinstance(data, dict):
-        return f"Planner 完了\n{plan_json}"
+        return f"Planner 完了\n\n{plan_json}"
 
-    sections: list[str] = ["Planner 完了"]
+    sections: list[str] = ["### 📐 Planner 完了"]
 
     arch = data.get("architecture", "")
     if arch:
-        sections.append(f"\n📋 設計方針:\n{arch.strip()}")
+        sections.append(f"\n**📋 設計方針:**\n\n{arch.strip()}")
 
     modules = data.get("modules", [])
     if modules:
-        sections.append(f"\n📦 モジュール一覧 ({len(modules)} files):")
+        sections.append(f"\n**📦 モジュール一覧 ({len(modules)} files):**\n")
         for m in modules:
-            sections.append(f"  - {m}")
+            sections.append(f"- `{m}`")
 
     test_strategy = data.get("test_strategy", "")
     if test_strategy:
-        sections.append(f"\n🧪 テスト戦略:\n{test_strategy.strip()}")
+        sections.append(f"\n**🧪 テスト戦略:**\n\n{test_strategy.strip()}")
 
     dir_structure = data.get("directory_structure", "")
     if dir_structure:
-        sections.append(f"\n📁 ディレクトリ構成:\n{dir_structure.strip()}")
+        sections.append(f"\n**📁 ディレクトリ構成:**\n\n```\n{dir_structure.strip()}\n```")
 
     return "\n".join(sections)
 
 
 def _summarize_artifact(artifact_json: str) -> str:
-    """Generator 結果を人間向けに整形して全文出力する。"""
+    """Generator 結果を Markdown 形式で整形して出力する。"""
     try:
         data = json.loads(artifact_json)
     except (json.JSONDecodeError, TypeError):
-        return f"Generator 完了\n{artifact_json}"
+        return f"Generator 完了\n\n{artifact_json}"
 
     if not isinstance(data, dict):
-        return f"Generator 完了\n{artifact_json}"
+        return f"Generator 完了\n\n{artifact_json}"
 
     sections: list[str] = []
 
     files = data.get("files_created", [])
-    sections.append(f"Generator 完了 — {len(files)} files 作成")
+    sections.append(f"### 🔨 Generator 完了 — {len(files)} files 作成")
     if files:
-        sections.append("\n📄 作成ファイル:")
+        sections.append("\n**📄 作成ファイル:**\n")
         for f in files:
-            sections.append(f"  - {f}")
+            sections.append(f"- `{f}`")
 
     summary = data.get("summary", "")
     if summary:
-        sections.append(f"\n📝 実装サマリー:\n{summary.strip()}")
+        sections.append(f"\n**📝 実装サマリー:**\n\n{summary.strip()}")
 
     return "\n".join(sections)
 
@@ -432,7 +435,7 @@ class PGEOrchestrator(BaseAgent):
                 author=self.name,
                 content=types.Content(
                     role="model",
-                    parts=[types.Part(text=f"[Iteration {iteration}] 📐 {plan_summary}")],
+                    parts=[types.Part(text=f"**[Iteration {iteration}]**\n\n{plan_summary}")],
                 ),
             )
 
@@ -461,7 +464,7 @@ class PGEOrchestrator(BaseAgent):
                 author=self.name,
                 content=types.Content(
                     role="model",
-                    parts=[types.Part(text=f"[Iteration {iteration}] 🔨 {gen_summary}")],
+                    parts=[types.Part(text=f"**[Iteration {iteration}]**\n\n{gen_summary}")],
                 ),
             )
 
@@ -498,8 +501,9 @@ class PGEOrchestrator(BaseAgent):
                         parts=[
                             types.Part(
                                 text=(
-                                    f"[Iteration {iteration}] ✅ APPROVED: {result_text}"
-                                    f"\n{file_summary}"
+                                    f"### [Iteration {iteration}] ✅ APPROVED\n\n"
+                                    f"{result_text}\n\n"
+                                    f"---\n\n{file_summary}"
                                 )
                             )
                         ],
@@ -514,7 +518,7 @@ class PGEOrchestrator(BaseAgent):
                     role="model",
                     parts=[
                         types.Part(
-                            text=f"[Iteration {iteration}] 🔄 REVISE: {result_text[:200]}"
+                            text=f"### [Iteration {iteration}] 🔄 REVISE\n\n{result_text}"
                         )
                     ],
                 ),
