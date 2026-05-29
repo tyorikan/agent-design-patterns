@@ -301,44 +301,62 @@ def _build_file_summary(
 
 
 def _summarize_plan(plan_json: str) -> str:
-    """Planner 結果から人間向けの1行サマリーを生成する。"""
+    """Planner 結果を人間向けに整形して全文出力する。"""
     try:
         data = json.loads(plan_json)
     except (json.JSONDecodeError, TypeError):
-        return "Planner 完了（設計方針策定済み）"
+        return f"Planner 完了\n{plan_json}"
 
     if not isinstance(data, dict):
-        return "Planner 完了（設計方針策定済み）"
+        return f"Planner 完了\n{plan_json}"
+
+    sections: list[str] = ["Planner 完了"]
+
+    arch = data.get("architecture", "")
+    if arch:
+        sections.append(f"\n📋 設計方針:\n{arch.strip()}")
 
     modules = data.get("modules", [])
-    arch = data.get("architecture", "")
-    # アーキテクチャの先頭80文字
-    arch_short = arch.strip().split("\n")[0][:80] if arch else ""
-    parts = ["Planner 完了"]
-    if arch_short:
-        parts.append(arch_short)
     if modules:
-        parts.append(f"({len(modules)} modules)")
-    return " — ".join(parts)
+        sections.append(f"\n📦 モジュール一覧 ({len(modules)} files):")
+        for m in modules:
+            sections.append(f"  - {m}")
+
+    test_strategy = data.get("test_strategy", "")
+    if test_strategy:
+        sections.append(f"\n🧪 テスト戦略:\n{test_strategy.strip()}")
+
+    dir_structure = data.get("directory_structure", "")
+    if dir_structure:
+        sections.append(f"\n📁 ディレクトリ構成:\n{dir_structure.strip()}")
+
+    return "\n".join(sections)
 
 
 def _summarize_artifact(artifact_json: str) -> str:
-    """Generator 結果から人間向けの1行サマリーを生成する。"""
+    """Generator 結果を人間向けに整形して全文出力する。"""
     try:
         data = json.loads(artifact_json)
     except (json.JSONDecodeError, TypeError):
-        return "Generator 完了（コード生成済み）"
+        return f"Generator 完了\n{artifact_json}"
 
     if not isinstance(data, dict):
-        return "Generator 完了（コード生成済み）"
+        return f"Generator 完了\n{artifact_json}"
+
+    sections: list[str] = []
 
     files = data.get("files_created", [])
+    sections.append(f"Generator 完了 — {len(files)} files 作成")
+    if files:
+        sections.append("\n📄 作成ファイル:")
+        for f in files:
+            sections.append(f"  - {f}")
+
     summary = data.get("summary", "")
-    summary_short = summary.strip().split("\n")[0][:100] if summary else ""
-    parts = [f"Generator 完了 — {len(files)} files"]
-    if summary_short:
-        parts.append(summary_short)
-    return ": ".join(parts)
+    if summary:
+        sections.append(f"\n📝 実装サマリー:\n{summary.strip()}")
+
+    return "\n".join(sections)
 
 
 class PGEOrchestrator(BaseAgent):
