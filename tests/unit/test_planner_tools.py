@@ -7,6 +7,7 @@ LLM 呼び出しは行わず、純粋なロジックのみを検証する。
 
 from patterns.agentic_pipeline.tools import (
     _PLANNER_IGNORE_DIRS,
+    _strip_markdown_fences,
     list_directory,
     read_file,
 )
@@ -135,3 +136,38 @@ class TestPlannerIgnoreDirs:
 
     def test_is_set(self):
         assert isinstance(_PLANNER_IGNORE_DIRS, set)
+
+
+# ============================================================
+# _strip_markdown_fences Tests
+# ============================================================
+class TestStripMarkdownFences:
+    def test_strips_json_fence(self):
+        text = '```json\n{"key": "value"}\n```'
+        assert _strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_strips_plain_fence(self):
+        text = '```\n{"key": "value"}\n```'
+        assert _strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_no_fence_passthrough(self):
+        text = '{"key": "value"}'
+        assert _strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_strips_whitespace(self):
+        text = '  ```json\n{"key": "value"}\n```  '
+        assert _strip_markdown_fences(text) == '{"key": "value"}'
+
+    def test_multiline_json(self):
+        text = '```json\n{\n  "architecture": "Clean Architecture",\n  "modules": ["main.py"]\n}\n```'
+        result = _strip_markdown_fences(text)
+        assert '"architecture"' in result
+        assert '"modules"' in result
+        assert '```' not in result
+
+    def test_empty_string(self):
+        assert _strip_markdown_fences("") == ""
+
+    def test_plain_text(self):
+        text = "This is plain text"
+        assert _strip_markdown_fences(text) == text

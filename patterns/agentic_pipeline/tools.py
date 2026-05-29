@@ -199,6 +199,23 @@ def list_directory(directory_path: str) -> str:
     return "\n".join(lines) if lines else "(empty directory)"
 
 
+def _strip_markdown_fences(text: str) -> str:
+    """マークダウンのコードフェンスを除去する。
+
+    Claude は JSON 出力を ```json ... ``` で囲む傾向がある。
+    ADK の output_schema (model_validate_json) はこれをパースできないため、
+    手動で除去する。
+    """
+    import re
+
+    stripped = text.strip()
+    # ```json ... ``` or ``` ... ``` パターンを除去
+    match = re.match(r"^```(?:json)?\s*\n(.*?)\n```\s*$", stripped, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return stripped
+
+
 async def run_planner_agent(
     user_request: str,
     tool_context: ToolContext,
@@ -267,12 +284,13 @@ async def run_planner_agent(
         planner_tools = [read_file, list_directory]
 
     # LlmAgent を構築（Claude は models/__init__.py で lazy registration 済み）
+    # NOTE: output_schema は使わない。Claude は JSON を ```json ... ``` で囲む傾向があり、
+    # ADK の model_validate_json() がパースに失敗するため、手動パースする。
     planner = LlmAgent(
         name="planner_claude",
         model="claude-opus-4-8",
         instruction=PLANNER_SYSTEM_PROMPT,
         tools=planner_tools,
-        output_schema=PlanOutput,
         output_key="plan",
     )
 
@@ -303,6 +321,16 @@ async def run_planner_agent(
 
     if not result:
         logger.warning("Planner: Claude から応答なし。空文字列を返します。")
+
+    # Claude のマークダウンフェンスを除去して JSON を抽出
+    result = _strip_markdown_fences(result)
+
+    # PlanOutput バリデーション（ログ用、失敗しても続行）
+    try:
+        PlanOutput.model_validate_json(result)
+        logger.info("Planner: PlanOutput バリデーション成功")
+    except Exception as e:
+        logger.warning("Planner: PlanOutput バリデーション失敗（続行）: %s", e)
 
     tool_context.state["plan"] = result
     logger.info("Planner: 設計方針策定完了")
