@@ -137,4 +137,4 @@ PYTHONPATH=../.. python3 demo.py
 
 ## 次のステップ
 
-→ **[Lv.10 Swarm Pattern](../10_swarm/)**: 分散型コンセンサス
+→ **[Lv.10 Swarm Pattern](../p10_swarm/)**: 分散型コンセンサス

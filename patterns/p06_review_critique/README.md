@@ -96,7 +96,7 @@ review_loop = Workflow(
 
 ```bash
 # デモ実行
-PYTHONPATH=. python3 patterns/06_review_critique/demo.py
+PYTHONPATH=. python3 patterns/p06_review_critique/demo.py
 
 # テスト（プロジェクトルートから）
 pytest tests/unit/test_agent_structure.py::TestReviewCritiqueStructure -v
@@ -113,4 +113,4 @@ pytest tests/integration/test_patterns.py::TestReviewCritique -v
 
 ## 次のステップ
 
-→ **[Lv.7 Iterative Refinement](../07_iterative_refinement/)**: 自己評価スコアで品質改善（Generator と Critic を1つに統合）
+→ **[Lv.7 Iterative Refinement](../p07_iterative_refinement/)**: 自己評価スコアで品質改善（Generator と Critic を1つに統合）

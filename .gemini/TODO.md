@@ -21,21 +21,21 @@
 - [x] CONTRIBUTING.md の作成
 
 ## パターン実装 Phase 2（基礎）
-- [x] 01_single_agent（agent.py + demo.py + tests/）
-- [x] 02_react_pattern（agent.py + demo.py + tests/）
-- [x] 03_sequential（agent.py + demo.py + tests/）
-- [x] 04_parallel（agent.py + demo.py + tests/）
-- [x] 05_loop（agent.py + demo.py + tests/）
+- [x] p01_single_agent（agent.py + demo.py + tests/）
+- [x] p02_react_pattern（agent.py + demo.py + tests/）
+- [x] p03_sequential（agent.py + demo.py + tests/）
+- [x] p04_parallel（agent.py + demo.py + tests/）
+- [x] p05_loop（agent.py + demo.py + tests/）
 
 ## パターン実装 Phase 3（応用）
-- [x] 06_review_critique（agent.py + demo.py + tests/）
-- [x] 07_iterative_refinement（agent.py + demo.py + tests/）
-- [x] 08_coordinator（agent.py + demo.py + tests/）
+- [x] p06_review_critique（agent.py + demo.py + tests/）
+- [x] p07_iterative_refinement（agent.py + demo.py + tests/）
+- [x] p08_coordinator（agent.py + demo.py + tests/）
 
 ## パターン実装 Phase 4（高度）
-- [x] 09_hierarchical（agent.py + demo.py + tests/）
-- [x] 10_swarm（agent.py + demo.py + tests/）
-- [x] 11_human_in_the_loop（agent.py + demo.py + tests/）
+- [x] p09_hierarchical（agent.py + demo.py + tests/）
+- [x] p10_swarm（agent.py + demo.py + tests/）
+- [x] p11_human_in_the_loop（agent.py + demo.py + tests/）
 
 ## Capstone
 - [x] enterprise_research_agent の設計

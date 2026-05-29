@@ -74,7 +74,7 @@ Detailed Report
 
 ```bash
 # デモ実行（思考ループが表示される）
-PYTHONPATH=. python3 patterns/02_react_pattern/demo.py
+PYTHONPATH=. python3 patterns/p02_react_pattern/demo.py
 
 # テスト（プロジェクトルートから）
 pytest tests/unit/test_agent_structure.py::TestReActStructure -v
@@ -90,4 +90,4 @@ pytest tests/integration/test_patterns.py::TestReAct -v
 
 ## 次のステップ
 
-→ **[Lv.3 Sequential Pattern](../03_sequential/)**: 固定した順序で複数エージェントを実行する
+→ **[Lv.3 Sequential Pattern](../p03_sequential/)**: 固定した順序で複数エージェントを実行する

@@ -34,7 +34,7 @@ pip install -e ".[dev]"
 
 ```bash
 # 1. 各パターンのデモ実行
-PYTHONPATH=. python3 patterns/01_single_agent/demo.py
+PYTHONPATH=. python3 patterns/p01_single_agent/demo.py
 
 # 2. ADK Web UI で対話的にテスト
 docker compose up
@@ -55,10 +55,10 @@ pytest tests/ -v              # 全テスト
 
 | Level | パターン | ディレクトリ | ユースケース | ADK クラス |
 |-------|---------|------------|------------|-----------|
-| Lv.1 | **Single Agent** | `patterns/01_single_agent/` | GCP ドキュメント Q&A | `LlmAgent` |
-| Lv.2 | **ReAct Pattern** | `patterns/02_react_pattern/` | 技術調査（Thought/Action/Obs 可視化） | `LlmAgent` |
-| Lv.3 | **Sequential** | `patterns/03_sequential/` | ETL データパイプライン | `Workflow` チェーンタプル |
-| Lv.4 | **Parallel** | `patterns/04_parallel/` | マルチソース AI ニュース集約 | `Workflow` ネストタプル |
+| Lv.1 | **Single Agent** | `patterns/p01_single_agent/` | GCP ドキュメント Q&A | `LlmAgent` |
+| Lv.2 | **ReAct Pattern** | `patterns/p02_react_pattern/` | 技術調査（Thought/Action/Obs 可視化） | `LlmAgent` |
+| Lv.3 | **Sequential** | `patterns/p03_sequential/` | ETL データパイプライン | `Workflow` チェーンタプル |
+| Lv.4 | **Parallel** | `patterns/p04_parallel/` | マルチソース AI ニュース集約 | `Workflow` ネストタプル |
 
 ### 反復ワークフロー（Iterative Workflows）
 
@@ -66,9 +66,9 @@ pytest tests/ -v              # 全テスト
 
 | Level | パターン | ディレクトリ | ユースケース | ADK クラス |
 |-------|---------|------------|------------|-----------|
-| Lv.5 | **Loop** | `patterns/05_loop/` | コード生成 & テストループ | `Workflow` 条件付きサイクル |
-| Lv.6 | **Review & Critique** | `patterns/06_review_critique/` | ブログ記事品質保証 | `Workflow` 条件付きサイクル |
-| Lv.7 | **Iterative Refinement** | `patterns/07_iterative_refinement/` | 技術ドキュメント自己改善 | `Workflow` 条件付きサイクル |
+| Lv.5 | **Loop** | `patterns/p05_loop/` | コード生成 & テストループ | `Workflow` 条件付きサイクル |
+| Lv.6 | **Review & Critique** | `patterns/p06_review_critique/` | ブログ記事品質保証 | `Workflow` 条件付きサイクル |
+| Lv.7 | **Iterative Refinement** | `patterns/p07_iterative_refinement/` | 技術ドキュメント自己改善 | `Workflow` 条件付きサイクル |
 
 ### 動的オーケストレーション（Dynamic Orchestration）
 
@@ -76,15 +76,15 @@ LLM が動的にルーティング・タスク分解を行う。
 
 | Level | パターン | ディレクトリ | ユースケース | ADK クラス |
 |-------|---------|------------|------------|-----------|
-| Lv.8 | **Coordinator** | `patterns/08_coordinator/` | カスタマーサポートルーター | `LlmAgent` |
-| Lv.9 | **Hierarchical** | `patterns/09_hierarchical/` | 競合分析（多層分解） | `LlmAgent` 多層 |
-| Lv.10 | **Swarm** | `patterns/10_swarm/` | 製品設計コンセンサス | `Workflow` + 多エージェント |
+| Lv.8 | **Coordinator** | `patterns/p08_coordinator/` | カスタマーサポートルーター | `LlmAgent` |
+| Lv.9 | **Hierarchical** | `patterns/p09_hierarchical/` | 競合分析（多層分解） | `LlmAgent` 多層 |
+| Lv.10 | **Swarm** | `patterns/p10_swarm/` | 製品設計コンセンサス | `Workflow` + 多エージェント |
 
 ### 特殊パターン
 
 | Level | パターン | ディレクトリ | ユースケース | ADK クラス |
 |-------|---------|------------|------------|-----------|
-| Bonus | **Human-in-the-Loop** | `patterns/11_human_in_the_loop/` | コンテンツ承認ワークフロー | `Workflow` |
+| Bonus | **Human-in-the-Loop** | `patterns/p11_human_in_the_loop/` | コンテンツ承認ワークフロー | `Workflow` |
 | 🏆 | **Capstone** | `patterns/capstone/` | 全パターン統合 企業分析レポート | `Workflow` 全構文統合 |
 
 ### 発展パターン（独立実装）
@@ -271,7 +271,7 @@ docker compose up
 # → チャットで質問を入力
 
 # 特定パターンのみ実行
-docker compose run --rm runner bash -c "PYTHONPATH=/app python3 patterns/01_single_agent/demo.py"
+docker compose run --rm runner bash -c "PYTHONPATH=/app python3 patterns/p01_single_agent/demo.py"
 ```
 
 **Docker の仕組み:**
@@ -296,7 +296,7 @@ docker compose run --rm runner bash -c "PYTHONPATH=/app python3 patterns/01_sing
 
 ```bash
 # ADK イベントストリームの確認
-# → patterns/02_react_pattern/agent.py の run_with_react_trace() を参考に
+# → patterns/p02_react_pattern/agent.py の run_with_react_trace() を参考に
 
 # 環境変数の確認
 python3 -c "from shared.config import get_settings; print(get_settings())"

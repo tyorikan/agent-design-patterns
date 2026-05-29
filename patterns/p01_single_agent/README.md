@@ -65,7 +65,7 @@ User Question
 
 ```bash
 # デモ実行（事前に .env 設定が必要）
-PYTHONPATH=. python3 patterns/01_single_agent/demo.py
+PYTHONPATH=. python3 patterns/p01_single_agent/demo.py
 
 # テスト（プロジェクトルートから）
 pytest tests/unit/test_agent_structure.py::TestSingleAgentStructure -v
@@ -81,4 +81,4 @@ pytest tests/integration/test_patterns.py::TestSingleAgent -v
 
 ## 次のステップ
 
-→ **[Lv.2 ReAct Pattern](../02_react_pattern/)**: Thought/Action/Observation ループを明示的に理解する
+→ **[Lv.2 ReAct Pattern](../p02_react_pattern/)**: Thought/Action/Observation ループを明示的に理解する

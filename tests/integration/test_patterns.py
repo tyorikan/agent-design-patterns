@@ -29,7 +29,7 @@ class TestSingleAgent:
     @pytest.mark.asyncio
     async def test_responds_to_gcp_question(self):
         """GCP の質問に対して十分な長さの回答を返す。"""
-        mod = load_pattern_agent("01_single_agent")
+        mod = load_pattern_agent("p01_single_agent")
         response = await run_agent_final_response(
             mod.root_agent, "gcp_docs_agent",
             "Cloud Run とは何ですか？一言で教えてください。"
@@ -44,7 +44,7 @@ class TestReAct:
     @pytest.mark.asyncio
     async def test_produces_structured_response(self):
         """構造化された（改行を含む）回答を返す。"""
-        mod = load_pattern_agent("02_react_pattern")
+        mod = load_pattern_agent("p02_react_pattern")
         response = await run_agent_final_response(
             mod.root_agent, "research_react_agent",
             "Python と Go の比較を教えてください"
@@ -59,7 +59,7 @@ class TestSequential:
     @pytest.mark.asyncio
     async def test_pipeline_processes_data(self):
         """Sequential パイプラインがデータを順次処理する。"""
-        mod = load_pattern_agent("03_sequential")
+        mod = load_pattern_agent("p03_sequential")
         test_data = """raw_data: 以下のデータを処理してください。
 name,age,score
 Alice,25,90
@@ -87,7 +87,7 @@ class TestParallel:
     @pytest.mark.asyncio
     async def test_aggregation_produces_report(self):
         """Parallel エージェントが複数ソースを集約してレポートを作成する。"""
-        mod = load_pattern_agent("04_parallel")
+        mod = load_pattern_agent("p04_parallel")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "news_aggregator",
             "topic: 生成 AI の最新動向について調査してください"
@@ -113,7 +113,7 @@ class TestLoop:
     @pytest.mark.asyncio
     async def test_generates_code_with_loop(self):
         """Loop がコード生成→テストを繰り返す。"""
-        mod = load_pattern_agent("05_loop")
+        mod = load_pattern_agent("p05_loop")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "code_generation_loop",
             "FizzBuzz を実装する Python 関数を書いてください。"
@@ -137,7 +137,7 @@ class TestReviewCritique:
     @pytest.mark.asyncio
     async def test_generates_and_critiques_article(self):
         """Generator と Critic が両方動作する。"""
-        mod = load_pattern_agent("06_review_critique")
+        mod = load_pattern_agent("p06_review_critique")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "blog_review_loop",
             "Cloud Run を使ったサーバーレスアプリケーション開発"
@@ -157,7 +157,7 @@ class TestIterativeRefinement:
     @pytest.mark.asyncio
     async def test_generates_and_refines_document(self):
         """doc_refiner が反復的にドキュメントを改善する。"""
-        mod = load_pattern_agent("07_iterative_refinement")
+        mod = load_pattern_agent("p07_iterative_refinement")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "doc_refinement_loop",
             "Cloud Spanner の技術ドキュメントを作成してください"
@@ -176,7 +176,7 @@ class TestCoordinator:
     @pytest.mark.asyncio
     async def test_routes_order_query(self):
         """注文確認クエリが order_specialist にルーティングされる。"""
-        mod = load_pattern_agent("08_coordinator")
+        mod = load_pattern_agent("p08_coordinator")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "customer_service_coordinator",
             "注文番号 ORD-001 の配送状況を確認したいです"
@@ -191,7 +191,7 @@ class TestCoordinator:
     @pytest.mark.asyncio
     async def test_routes_refund_query(self):
         """返金クエリが refund_specialist にルーティングされる。"""
-        mod = load_pattern_agent("08_coordinator")
+        mod = load_pattern_agent("p08_coordinator")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "customer_service_coordinator",
             "注文 ORD-002 で二重請求があったので、3000円の返金をお願いします"
@@ -211,7 +211,7 @@ class TestHierarchical:
     @pytest.mark.asyncio
     async def test_generates_analysis_report(self):
         """階層構造で競合分析レポートを生成する。"""
-        mod = load_pattern_agent("09_hierarchical")
+        mod = load_pattern_agent("p09_hierarchical")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "competitive_analysis_root",
             "Google Cloud の競合分析をしてください"
@@ -232,7 +232,7 @@ class TestSwarm:
     @pytest.mark.asyncio
     async def test_all_experts_participate(self):
         """全専門家 + consensus_builder が議論に参加する。"""
-        mod = load_pattern_agent("10_swarm")
+        mod = load_pattern_agent("p10_swarm")
         response, trajectory = await run_agent_trajectory(
             mod.root_agent, "product_design_swarm",
             "Google Cloud 上で動作するリアルタイム翻訳アプリを設計してください"

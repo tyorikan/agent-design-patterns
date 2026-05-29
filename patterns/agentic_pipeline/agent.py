@@ -231,42 +231,38 @@ def _build_file_summary(
     sections: list[str] = []
 
     # --- 1. コミットメッセージ風の要約 ---
-    sections.append("")
-    sections.append("📋 変更サマリー")
-    sections.append("")
+    sections.append("### 📋 変更サマリー\n")
 
     if user_request:
         # ユーザー要件の先頭 80 文字をタイトルに
         title = user_request.strip().split("\n")[0][:80]
-        sections.append(f"  feat: {title}")
-        sections.append("")
+        sections.append(f"**feat:** {title}\n")
 
     # 各ファイルの説明を抽出
     if created:
-        sections.append("  新規:")
+        sections.append("**新規:**\n")
         for p in created:
             desc = _extract_file_description(directory / p)
             desc_str = f" — {desc}" if desc else ""
-            sections.append(f"    {p}{desc_str}")
+            sections.append(f"- `{p}`{desc_str}")
     if modified:
-        sections.append("  変更:")
+        sections.append("\n**変更:**\n")
         for p in modified:
             desc = _extract_file_description(directory / p)
             desc_str = f" — {desc}" if desc else ""
-            sections.append(f"    {p}{desc_str}")
+            sections.append(f"- `{p}`{desc_str}")
     if deleted:
-        sections.append("  削除:")
+        sections.append("\n**削除:**\n")
         for p in deleted:
-            sections.append(f"    {p}")
+            sections.append(f"- `{p}`")
 
     # --- 2. tree 形式のファイル一覧 ---
-    sections.append("")
-    sections.append(f"📁 出力ディレクトリ: {directory}")
-    sections.append("")
+    sections.append(f"\n### 📁 出力ディレクトリ: `{directory}`\n")
 
     total_files = 0
     total_lines = 0
 
+    tree_lines: list[str] = []
     all_entries: list[tuple[str, str]] = []
     for p in created:
         all_entries.append((p, "✨ NEW"))
@@ -280,20 +276,23 @@ def _build_file_summary(
         is_last = i == len(all_entries) - 1
         prefix = "└── " if is_last else "├── "
         if status == "🗑️  DEL":
-            sections.append(f"  {prefix}{status} {path}")
+            tree_lines.append(f"{prefix}{status} {path}")
         else:
             filepath = directory / path
             lc = _count_lines(filepath)
             size = filepath.stat().st_size
-            sections.append(
-                f"  {prefix}{status} {path}  ({lc} lines, {size:,} bytes)"
+            tree_lines.append(
+                f"{prefix}{status} {path}  ({lc} lines, {size:,} bytes)"
             )
             total_lines += lc
         total_files += 1
 
-    sections.append("")
+    sections.append("```")
+    sections.extend(tree_lines)
+    sections.append("```")
+
     sections.append(
-        f"  合計: {len(created)} 新規, {len(modified)} 変更, "
+        f"\n> **合計:** {len(created)} 新規, {len(modified)} 変更, "
         f"{len(deleted)} 削除 ({total_files} files, {total_lines:,} lines)"
     )
 
@@ -301,44 +300,66 @@ def _build_file_summary(
 
 
 def _summarize_plan(plan_json: str) -> str:
-    """Planner 結果から人間向けの1行サマリーを生成する。"""
+    """Planner 結果を Markdown 形式で整形して出力する。
+
+    adk web (ngx-markdown) と adk run (ターミナル) の両方で読みやすくするため、
+    Markdown 記法で出力する。
+    """
     try:
         data = json.loads(plan_json)
     except (json.JSONDecodeError, TypeError):
-        return "Planner 完了（設計方針策定済み）"
+        return f"Planner 完了\n\n{plan_json}"
 
     if not isinstance(data, dict):
-        return "Planner 完了（設計方針策定済み）"
+        return f"Planner 完了\n\n{plan_json}"
+
+    sections: list[str] = ["### 📐 Planner 完了"]
+
+    arch = data.get("architecture", "")
+    if arch:
+        sections.append(f"\n**📋 設計方針:**\n\n{arch.strip()}")
 
     modules = data.get("modules", [])
-    arch = data.get("architecture", "")
-    # アーキテクチャの先頭80文字
-    arch_short = arch.strip().split("\n")[0][:80] if arch else ""
-    parts = ["Planner 完了"]
-    if arch_short:
-        parts.append(arch_short)
     if modules:
-        parts.append(f"({len(modules)} modules)")
-    return " — ".join(parts)
+        sections.append(f"\n**📦 モジュール一覧 ({len(modules)} files):**\n")
+        for m in modules:
+            sections.append(f"- `{m}`")
+
+    test_strategy = data.get("test_strategy", "")
+    if test_strategy:
+        sections.append(f"\n**🧪 テスト戦略:**\n\n{test_strategy.strip()}")
+
+    dir_structure = data.get("directory_structure", "")
+    if dir_structure:
+        sections.append(f"\n**📁 ディレクトリ構成:**\n\n```\n{dir_structure.strip()}\n```")
+
+    return "\n".join(sections)
 
 
 def _summarize_artifact(artifact_json: str) -> str:
-    """Generator 結果から人間向けの1行サマリーを生成する。"""
+    """Generator 結果を Markdown 形式で整形して出力する。"""
     try:
         data = json.loads(artifact_json)
     except (json.JSONDecodeError, TypeError):
-        return "Generator 完了（コード生成済み）"
+        return f"Generator 完了\n\n{artifact_json}"
 
     if not isinstance(data, dict):
-        return "Generator 完了（コード生成済み）"
+        return f"Generator 完了\n\n{artifact_json}"
+
+    sections: list[str] = []
 
     files = data.get("files_created", [])
+    sections.append(f"### 🔨 Generator 完了 — {len(files)} files 作成")
+    if files:
+        sections.append("\n**📄 作成ファイル:**\n")
+        for f in files:
+            sections.append(f"- `{f}`")
+
     summary = data.get("summary", "")
-    summary_short = summary.strip().split("\n")[0][:100] if summary else ""
-    parts = [f"Generator 完了 — {len(files)} files"]
-    if summary_short:
-        parts.append(summary_short)
-    return ": ".join(parts)
+    if summary:
+        sections.append(f"\n**📝 実装サマリー:**\n\n{summary.strip()}")
+
+    return "\n".join(sections)
 
 
 class PGEOrchestrator(BaseAgent):
@@ -357,8 +378,17 @@ class PGEOrchestrator(BaseAgent):
 
     async def _run_async_impl(self, ctx: InvocationContext):
         """PGE ループを制御する。"""
-        state = ctx.session.state
-        tool_context = _StateProxy(state)
+        session_state = ctx.session.state
+
+        # PGE ループ内の中間データはローカル dict で管理する。
+        # session state に直接書き込むと SQLite の update_time が進み、
+        # 次の Event yield 時に stale session エラーが発生するため。
+        local_state: dict = {}
+        # session state から初期値をコピー（output_dir 等）
+        for key in ("output_dir",):
+            if key in session_state:
+                local_state[key] = session_state[key]
+        tool_context = _StateProxy(local_state)
 
         # ユーザーメッセージを session events から取得
         user_request = ""
@@ -372,8 +402,8 @@ class PGEOrchestrator(BaseAgent):
                 if texts:
                     user_request = "\n".join(texts)
                     break
-        state["user_request"] = user_request
-        output_dir_str = state.get("output_dir", "")
+        local_state["user_request"] = user_request
+        output_dir_str = local_state.get("output_dir", "")
         output_dir = Path(output_dir_str).resolve() if output_dir_str else DEFAULT_OUTPUT_DIR
         logger.info(
             "PGE Orchestrator: user_request=%s, output_dir=%s",
@@ -403,10 +433,10 @@ class PGEOrchestrator(BaseAgent):
             )
 
             plan = await run_planner_agent(
-                user_request=state.get("user_request", ""),
+                user_request=local_state.get("user_request", ""),
                 tool_context=tool_context,
             )
-            state["plan"] = plan
+            local_state["plan"] = plan
 
             # Planner 完了サマリー
             plan_summary = _summarize_plan(plan)
@@ -414,7 +444,7 @@ class PGEOrchestrator(BaseAgent):
                 author=self.name,
                 content=types.Content(
                     role="model",
-                    parts=[types.Part(text=f"[Iteration {iteration}] 📐 {plan_summary}")],
+                    parts=[types.Part(text=f"**[Iteration {iteration}]**\n\n{plan_summary}")],
                 ),
             )
 
@@ -435,7 +465,7 @@ class PGEOrchestrator(BaseAgent):
                 plan=plan,
                 tool_context=tool_context,
             )
-            state["artifact"] = artifact
+            local_state["artifact"] = artifact
 
             # Generator 完了サマリー
             gen_summary = _summarize_artifact(artifact)
@@ -443,7 +473,7 @@ class PGEOrchestrator(BaseAgent):
                 author=self.name,
                 content=types.Content(
                     role="model",
-                    parts=[types.Part(text=f"[Iteration {iteration}] 🔨 {gen_summary}")],
+                    parts=[types.Part(text=f"**[Iteration {iteration}]**\n\n{gen_summary}")],
                 ),
             )
 
@@ -465,7 +495,7 @@ class PGEOrchestrator(BaseAgent):
                 artifact=artifact,
                 tool_context=tool_context,
             )
-            state["evaluator_feedback"] = result_text
+            local_state["evaluator_feedback"] = result_text
 
             # --- Verdict 判定 ---
             if result_text.startswith("APPROVED"):
@@ -480,8 +510,9 @@ class PGEOrchestrator(BaseAgent):
                         parts=[
                             types.Part(
                                 text=(
-                                    f"[Iteration {iteration}] ✅ APPROVED: {result_text}"
-                                    f"\n{file_summary}"
+                                    f"### [Iteration {iteration}] ✅ APPROVED\n\n"
+                                    f"{result_text}\n\n"
+                                    f"---\n\n{file_summary}"
                                 )
                             )
                         ],
@@ -496,7 +527,7 @@ class PGEOrchestrator(BaseAgent):
                     role="model",
                     parts=[
                         types.Part(
-                            text=f"[Iteration {iteration}] 🔄 REVISE: {result_text[:200]}"
+                            text=f"### [Iteration {iteration}] 🔄 REVISE\n\n{result_text}"
                         )
                     ],
                 ),
