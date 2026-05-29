@@ -7,6 +7,7 @@ LLM 呼び出しは行わず、純粋なロジックのみを検証する。
 
 from patterns.agentic_pipeline.tools import (
     _PLANNER_IGNORE_DIRS,
+    _extract_json,
     _strip_markdown_fences,
     list_directory,
     read_file,
@@ -171,3 +172,42 @@ class TestStripMarkdownFences:
     def test_plain_text(self):
         text = "This is plain text"
         assert _strip_markdown_fences(text) == text
+
+
+# ============================================================
+# _extract_json Tests
+# ============================================================
+class TestExtractJson:
+    def test_valid_json_passthrough(self):
+        text = '{"architecture": "Clean"}'
+        assert _extract_json(text) == text
+
+    def test_text_before_json(self):
+        text = '設計方針を策定しました。\n\n{"architecture": "Clean"}'
+        assert _extract_json(text) == '{"architecture": "Clean"}'
+
+    def test_text_after_json(self):
+        text = '{"architecture": "Clean"}\n\n以上です。'
+        # テキスト後に追加テキストがあっても JSON を抽出
+        result = _extract_json(text)
+        assert '"architecture"' in result
+
+    def test_text_surrounding_json(self):
+        text = '以下が設計です:\n{"modules": ["main.py"]}\n完了しました。'
+        result = _extract_json(text)
+        assert result == '{"modules": ["main.py"]}'
+
+    def test_plain_text_passthrough(self):
+        text = "これは JSON ではありません"
+        assert _extract_json(text) == text
+
+    def test_empty_string(self):
+        assert _extract_json("") == ""
+
+    def test_multiline_json_with_prefix(self):
+        text = '確認しました。\n{\n  "architecture": "DDD",\n  "modules": ["a.py", "b.py"]\n}'
+        result = _extract_json(text)
+        import json
+        parsed = json.loads(result)
+        assert parsed["architecture"] == "DDD"
+        assert len(parsed["modules"]) == 2

@@ -216,6 +216,38 @@ def _strip_markdown_fences(text: str) -> str:
     return stripped
 
 
+def _extract_json(text: str) -> str:
+    """テキストから JSON オブジェクト部分を抽出する。
+
+    Claude が Function Calling 後に中間テキスト + JSON を返す場合、
+    テキスト部分を除去して JSON 部分のみを返す。
+
+    例: "設計方針を策定しました。\n\n{\"architecture\": ...}"
+    → '{"architecture": ...}'
+    """
+    stripped = text.strip()
+
+    # 既に valid JSON ならそのまま返す
+    try:
+        json.loads(stripped)
+        return stripped
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # テキスト中の最初の { から最後の } までを抽出
+    first_brace = stripped.find("{")
+    last_brace = stripped.rfind("}")
+    if first_brace != -1 and last_brace > first_brace:
+        candidate = stripped[first_brace:last_brace + 1]
+        try:
+            json.loads(candidate)
+            return candidate
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # 抽出できなければ元のテキストをそのまま返す
+    return stripped
+
 async def run_planner_agent(
     user_request: str,
     tool_context: ToolContext,
@@ -314,16 +346,39 @@ async def run_planner_agent(
             parts=[types.Part(text=prompt)],
         ),
     ):
-        if event.content and event.content.parts:
+        # Claude が Function Calling する場合、中間テキスト（「確認します...」等）と
+        # 最終 JSON が別々の event で返る。最終応答のみを採用する。
+        if event.is_final_response() and event.content and event.content.parts:
             for part in event.content.parts:
                 if part.text:
-                    result += part.text
+                    result = part.text  # 上書き（最終応答のみ）
+
+    if not result:
+        # is_final_response() で取れない場合のフォールバック: 全テキストから JSON を抽出
+        all_text = ""
+        async for event in runner.run_async(
+            user_id="pge",
+            session_id=session.id,
+            new_message=types.Content(
+                role="user",
+                parts=[types.Part(text="上記の設計方針を JSON で出力してください。")],
+            ),
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        all_text += part.text
+        if all_text:
+            result = all_text
 
     if not result:
         logger.warning("Planner: Claude から応答なし。空文字列を返します。")
 
     # Claude のマークダウンフェンスを除去して JSON を抽出
     result = _strip_markdown_fences(result)
+
+    # 混在テキストから JSON 部分だけを抽出（中間テキスト + JSON の場合）
+    result = _extract_json(result)
 
     # PlanOutput バリデーション（ログ用、失敗しても続行）
     try:
