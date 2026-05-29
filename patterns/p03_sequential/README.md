@@ -64,7 +64,7 @@ Final Report
 
 ```bash
 # デモ実行
-PYTHONPATH=. python3 patterns/03_sequential/demo.py
+PYTHONPATH=. python3 patterns/p03_sequential/demo.py
 
 # テスト（プロジェクトルートから）
 pytest tests/unit/test_agent_structure.py::TestSequentialStructure -v
@@ -80,4 +80,4 @@ pytest tests/integration/test_patterns.py::TestSequential -v
 
 ## 次のステップ
 
-→ **[Lv.4 Parallel Pattern](../04_parallel/)**: 独立したタスクを並列実行してレイテンシを削減
+→ **[Lv.4 Parallel Pattern](../p04_parallel/)**: 独立したタスクを並列実行してレイテンシを削減

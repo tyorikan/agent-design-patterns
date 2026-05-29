@@ -30,7 +30,7 @@ gcloud auth application-default login
 ```
 agent-design-patterns/
 ├── patterns/                 # 各デザインパターンの実装
-│   ├── 01_single_agent/     # Lv.1〜11 + capstone
+│   ├── p01_single_agent/     # Lv.1〜11 + capstone
 │   │   ├── README.md        # 概念・図解・学習ポイント
 │   │   ├── agent.py         # エージェント定義（root_agent を export）
 │   │   └── demo.py          # デモスクリプト
@@ -198,7 +198,7 @@ pytest tests/ --cov=shared --cov-report=term-missing
 
 ```bash
 # 各パターンのデモ
-PYTHONPATH=. python3 patterns/01_single_agent/demo.py
+PYTHONPATH=. python3 patterns/p01_single_agent/demo.py
 
 # ADK Web UI（全パターンを対話的にテスト）
 docker compose up

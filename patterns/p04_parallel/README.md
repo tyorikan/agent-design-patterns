@@ -66,7 +66,7 @@ Query: "AI の最新動向を調べて"
 
 ```bash
 # デモ実行
-PYTHONPATH=. python3 patterns/04_parallel/demo.py
+PYTHONPATH=. python3 patterns/p04_parallel/demo.py
 
 # テスト（プロジェクトルートから）
 pytest tests/unit/test_agent_structure.py::TestParallelStructure -v
@@ -82,4 +82,4 @@ pytest tests/integration/test_patterns.py::TestParallel -v
 
 ## 次のステップ
 
-→ **[Lv.5 Loop Pattern](../05_loop/)**: 終了条件を満たすまで繰り返すパターン
+→ **[Lv.5 Loop Pattern](../p05_loop/)**: 終了条件を満たすまで繰り返すパターン

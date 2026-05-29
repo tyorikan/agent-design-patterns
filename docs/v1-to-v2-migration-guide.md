@@ -524,17 +524,17 @@ edges=[("START", a, b, {"CONTINUE": a})]
 | `pyproject.toml` | — | 🔴 必須 | バージョン引き上げ |
 | `shared/config.py` | なし | 🟢 なし | v2 互換 |
 | `shared/demo_runner.py` | なし | 🟢 なし | Runner/Session は v2 で健在 |
-| `01_single_agent/agent.py` | なし | 🟢 なし | v2 完全互換 |
-| `02_react_pattern/agent.py` | なし | 🟢 なし | v2 完全互換 |
-| `03_sequential/agent.py` | `SequentialAgent` | 🔴 大 | → `Workflow` チェーンタプル |
-| `04_parallel/agent.py` | `ParallelAgent`, `SequentialAgent` | 🔴 大 | → `Workflow` ネストタプル + callable instruction |
-| `05_loop/agent.py` | `LoopAgent` | 🔴 大 | → `Workflow` 条件付きサイクル |
-| `06_review_critique/agent.py` | `LoopAgent` | 🔴 大 | → `Workflow` 条件付きサイクル |
-| `07_iterative_refinement/agent.py` | `LoopAgent` | 🔴 大 | → `Workflow` 条件付きサイクル |
-| `08_coordinator/agent.py` | なし | 🟢 なし | v2 完全互換 |
-| `09_hierarchical/agent.py` | なし | 🟢 なし | v2 完全互換 |
-| `10_swarm/agent.py` | `LoopAgent`, `SequentialAgent` | 🔴 大 | → `Workflow` |
-| `11_human_in_the_loop/agent.py` | 独自ワークフロー | 🟡 中 | → `Workflow` + HITL |
+| `p01_single_agent/agent.py` | なし | 🟢 なし | v2 完全互換 |
+| `p02_react_pattern/agent.py` | なし | 🟢 なし | v2 完全互換 |
+| `p03_sequential/agent.py` | `SequentialAgent` | 🔴 大 | → `Workflow` チェーンタプル |
+| `p04_parallel/agent.py` | `ParallelAgent`, `SequentialAgent` | 🔴 大 | → `Workflow` ネストタプル + callable instruction |
+| `p05_loop/agent.py` | `LoopAgent` | 🔴 大 | → `Workflow` 条件付きサイクル |
+| `p06_review_critique/agent.py` | `LoopAgent` | 🔴 大 | → `Workflow` 条件付きサイクル |
+| `p07_iterative_refinement/agent.py` | `LoopAgent` | 🔴 大 | → `Workflow` 条件付きサイクル |
+| `p08_coordinator/agent.py` | なし | 🟢 なし | v2 完全互換 |
+| `p09_hierarchical/agent.py` | なし | 🟢 なし | v2 完全互換 |
+| `p10_swarm/agent.py` | `LoopAgent`, `SequentialAgent` | 🔴 大 | → `Workflow` |
+| `p11_human_in_the_loop/agent.py` | 独自ワークフロー | 🟡 中 | → `Workflow` + HITL |
 | `capstone/agent.py` | 全4クラス | 🔴 最大 | → `Workflow` 全面移行 + callable instruction |
 
 ### 影響ファイル数サマリー
@@ -563,17 +563,17 @@ edges=[("START", a, b, {"CONTINUE": a})]
 
 | # | テスト | パターン | 結果 |
 |---|--------|---------|------|
-| 1 | TestSingleAgent | 01_single_agent | ✅ PASS |
-| 2 | TestReAct | 02_react_pattern | ✅ PASS |
-| 3 | TestSequential | 03_sequential | ✅ PASS |
-| 4 | TestParallel | 04_parallel | ✅ PASS |
-| 5 | TestLoop | 05_loop | ✅ PASS |
-| 6 | TestReviewCritique | 06_review_critique | ✅ PASS |
-| 7 | TestIterativeRefinement | 07_iterative_refinement | ✅ PASS |
-| 8 | TestCoordinator (order) | 08_coordinator | ✅ PASS |
-| 9 | TestCoordinator (refund) | 08_coordinator | ✅ PASS |
-| 10 | TestHierarchical | 09_hierarchical | ✅ PASS |
-| 11 | TestSwarm | 10_swarm | ✅ PASS |
+| 1 | TestSingleAgent | p01_single_agent | ✅ PASS |
+| 2 | TestReAct | p02_react_pattern | ✅ PASS |
+| 3 | TestSequential | p03_sequential | ✅ PASS |
+| 4 | TestParallel | p04_parallel | ✅ PASS |
+| 5 | TestLoop | p05_loop | ✅ PASS |
+| 6 | TestReviewCritique | p06_review_critique | ✅ PASS |
+| 7 | TestIterativeRefinement | p07_iterative_refinement | ✅ PASS |
+| 8 | TestCoordinator (order) | p08_coordinator | ✅ PASS |
+| 9 | TestCoordinator (refund) | p08_coordinator | ✅ PASS |
+| 10 | TestHierarchical | p09_hierarchical | ✅ PASS |
+| 11 | TestSwarm | p10_swarm | ✅ PASS |
 | 12 | TestCapstone | capstone | ✅ PASS |
 
 ---
@@ -585,7 +585,7 @@ edges=[("START", a, b, {"CONTINUE": a})]
 | 1 | `google.adk.workflows` モジュール不存在 | import エラー | `google.adk.workflow` を使用 |
 | 2 | 無条件サイクルの禁止 | Graph validation エラー | dict 条件付きエッジを使用 |
 | 3 | チェーンタプル構文の発見 | より簡潔な記述が可能 | 全パターンで採用 |
-| 4 | ネストタプル fan-out/fan-in | 並列実行の簡潔な表現 | 04_parallel, capstone で採用 |
+| 4 | ネストタプル fan-out/fan-in | 並列実行の簡潔な表現 | p04_parallel, capstone で採用 |
 | 5 | `uv sync` の staging index 問題 | pip install 失敗 | `--index-url` で回避 |
 | 6 | `Workflow` は `BaseNode` | `sub_agents` に入れられない | Coordinator を edges 内に組み込み |
 | 7 | state_delta タイミング問題 | fan-in ノードで KeyError | callable instruction で解決 |

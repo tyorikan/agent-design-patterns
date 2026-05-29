@@ -133,4 +133,4 @@ PYTHONPATH=../.. python3 demo.py
 
 ## 次のステップ
 
-→ **[Bonus: Human-in-the-Loop](../11_human_in_the_loop/)**: 人間の判断を組み込む
+→ **[Bonus: Human-in-the-Loop](../p11_human_in_the_loop/)**: 人間の判断を組み込む

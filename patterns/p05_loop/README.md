@@ -84,7 +84,7 @@ loop = Workflow(
 
 ```bash
 # デモ実行
-PYTHONPATH=. python3 patterns/05_loop/demo.py
+PYTHONPATH=. python3 patterns/p05_loop/demo.py
 
 # テスト（プロジェクトルートから）
 pytest tests/unit/test_agent_structure.py::TestLoopStructure -v
@@ -100,4 +100,4 @@ pytest tests/integration/test_patterns.py::TestLoop -v
 
 ## 次のステップ
 
-→ **[Lv.6 Review & Critique Pattern](../06_review_critique/)**: Generator と Critic を組み合わせた品質保証
+→ **[Lv.6 Review & Critique Pattern](../p06_review_critique/)**: Generator と Critic を組み合わせた品質保証

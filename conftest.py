@@ -36,7 +36,7 @@ def load_pattern_agent(pattern_dir: str) -> ModuleType:
     相対インポート（from .tools import ...）を解決可能にする。
 
     Args:
-        pattern_dir: パターンディレクトリ名（例: "01_single_agent"）
+        pattern_dir: パターンディレクトリ名（例: "p01_single_agent"）
 
     Returns:
         ロードされたモジュール（mod.root_agent でエージェントにアクセス可能）

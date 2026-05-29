@@ -20,7 +20,7 @@ from conftest import load_pattern_agent
 # =====================================================
 class TestSingleAgentStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("01_single_agent")
+        self.mod = load_pattern_agent("p01_single_agent")
 
     def test_root_agent_is_llm_agent(self):
         assert isinstance(self.mod.root_agent, LlmAgent)
@@ -38,7 +38,7 @@ class TestSingleAgentStructure:
 # =====================================================
 class TestReActStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("02_react_pattern")
+        self.mod = load_pattern_agent("p02_react_pattern")
 
     def test_root_agent_is_llm_agent(self):
         assert isinstance(self.mod.root_agent, LlmAgent)
@@ -55,7 +55,7 @@ class TestReActStructure:
 # =====================================================
 class TestSequentialStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("03_sequential")
+        self.mod = load_pattern_agent("p03_sequential")
 
     def test_root_agent_is_workflow(self):
         assert isinstance(self.mod.root_agent, Workflow)
@@ -91,7 +91,7 @@ class TestSequentialStructure:
 # =====================================================
 class TestParallelStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("04_parallel")
+        self.mod = load_pattern_agent("p04_parallel")
 
     def test_root_agent_is_workflow(self):
         assert isinstance(self.mod.root_agent, Workflow)
@@ -120,7 +120,7 @@ class TestParallelStructure:
 # =====================================================
 class TestLoopStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("05_loop")
+        self.mod = load_pattern_agent("p05_loop")
 
     def test_root_agent_is_workflow(self):
         assert isinstance(self.mod.root_agent, Workflow)
@@ -144,7 +144,7 @@ class TestLoopStructure:
 # =====================================================
 class TestReviewCritiqueStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("06_review_critique")
+        self.mod = load_pattern_agent("p06_review_critique")
 
     def test_root_agent_is_workflow(self):
         assert isinstance(self.mod.root_agent, Workflow)
@@ -172,7 +172,7 @@ class TestReviewCritiqueStructure:
 # =====================================================
 class TestIterativeRefinementStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("07_iterative_refinement")
+        self.mod = load_pattern_agent("p07_iterative_refinement")
 
     def test_root_agent_is_workflow(self):
         assert isinstance(self.mod.root_agent, Workflow)
@@ -195,7 +195,7 @@ class TestIterativeRefinementStructure:
 # =====================================================
 class TestCoordinatorStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("08_coordinator")
+        self.mod = load_pattern_agent("p08_coordinator")
 
     def test_root_agent_is_llm_agent(self):
         assert isinstance(self.mod.root_agent, LlmAgent)
@@ -218,7 +218,7 @@ class TestCoordinatorStructure:
 # =====================================================
 class TestHierarchicalStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("09_hierarchical")
+        self.mod = load_pattern_agent("p09_hierarchical")
 
     def test_root_agent_is_llm_agent(self):
         assert isinstance(self.mod.root_agent, LlmAgent)
@@ -233,7 +233,7 @@ class TestHierarchicalStructure:
 # =====================================================
 class TestSwarmStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("10_swarm")
+        self.mod = load_pattern_agent("p10_swarm")
 
     def test_root_agent_is_workflow(self):
         assert isinstance(self.mod.root_agent, Workflow)
@@ -258,7 +258,7 @@ class TestSwarmStructure:
 # =====================================================
 class TestHumanInTheLoopStructure:
     def setup_method(self):
-        self.mod = load_pattern_agent("11_human_in_the_loop")
+        self.mod = load_pattern_agent("p11_human_in_the_loop")
 
     def test_root_agent_is_workflow(self):
         assert isinstance(self.mod.root_agent, Workflow)

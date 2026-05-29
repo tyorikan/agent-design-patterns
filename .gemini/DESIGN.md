@@ -20,13 +20,13 @@ agent-design-patterns/
 │   └── demo_runner.py               # デモ実行共通ユーティリティ
 │
 ├── patterns/                        # デザインパターン実装
-│   ├── 01_single_agent/
+│   ├── p01_single_agent/
 │   │   ├── README.md                # 概念説明・アーキテクチャ図・実行方法
 │   │   ├── agent.py                 # エージェント定義（root_agent を export）
 │   │   └── demo.py                  # デモシナリオ（自動実行）
-│   ├── 02_react_pattern/
+│   ├── p02_react_pattern/
 │   ├── ...
-│   ├── 11_human_in_the_loop/
+│   ├── p11_human_in_the_loop/
 │   ├── agentic_pipeline/            # PGE 自律コード生成パイプライン
 │   │   ├── agent.py                 # BaseAgent ベースの PGE オーケストレータ
 │   │   ├── tools.py                 # Antigravity Agent ラッパーツール群

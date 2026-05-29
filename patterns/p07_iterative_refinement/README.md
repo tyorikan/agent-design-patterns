@@ -125,4 +125,4 @@ PYTHONPATH=../.. python3 demo.py
 
 ## 次のステップ
 
-→ **[Lv.8 Coordinator Pattern](../08_coordinator/)**: LLM による動的ルーティング
+→ **[Lv.8 Coordinator Pattern](../p08_coordinator/)**: LLM による動的ルーティング

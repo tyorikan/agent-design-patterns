@@ -126,4 +126,4 @@ PYTHONPATH=../.. python3 demo.py
 
 ## 次のステップ
 
-→ **[Lv.9 Hierarchical Pattern](../09_hierarchical/)**: 多層エージェント階層
+→ **[Lv.9 Hierarchical Pattern](../p09_hierarchical/)**: 多層エージェント階層
