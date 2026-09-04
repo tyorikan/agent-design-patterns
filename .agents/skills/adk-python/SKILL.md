@@ -14,7 +14,7 @@ description: |
 **ADK (Agent Development Kit)** は Google が提供するオープンソースの Python フレームワーク。
 Gemini モデルを使ったエージェントの定義・オーケストレーション・デプロイを体系化する。
 
-- **バージョン**: ADK Python 2.1+ (2026 年現在最新)
+- **バージョン**: ADK Python 2.8.0 (2026-08-25 リリース)
 - **PyPI**: `google-adk`
 - **GitHub**: https://github.com/google/adk-python
 - **公式ドキュメント**: https://adk.dev / https://google.github.io/adk-docs/
@@ -25,11 +25,11 @@ Gemini モデルを使ったエージェントの定義・オーケストレー�
 
 ```bash
 # uv を使う場合（推奨）
-uv add google-adk
-uv add google-cloud-aiplatform  # Vertex AI 使用時
+uv add "google-adk>=2.8.0"
+uv add "google-genai>=2.22.0"  # Vertex AI / Google AI Studio 共通 SDK
 
 # pip を使う場合
-pip install google-adk
+pip install "google-adk>=2.8.0"
 ```
 
 ### 環境変数
@@ -37,8 +37,11 @@ pip install google-adk
 ```bash
 # Vertex AI (ADC / Service Account 使用 - 推奨)
 export GOOGLE_CLOUD_PROJECT="your-project-id"
-export GOOGLE_CLOUD_LOCATION="us-central1"
+export GOOGLE_CLOUD_LOCATION="global"       # グローバルエンドポイント（推奨）
 export GOOGLE_GENAI_USE_VERTEXAI="True"
+
+# LLM 呼び出し上限（v2.8.0 で追加。デフォルト 500）
+export ADK_MAX_LLM_CALLS="500"
 
 # Google AI Studio (API Key 使用)
 export GOOGLE_API_KEY="your-api-key"
@@ -67,7 +70,7 @@ from google.adk.tools import google_search
 
 root_agent = LlmAgent(
     name="my_agent",
-    model="gemini-2.0-flash",          # モデル名
+    model="gemini-3.8-flash",          # モデル名
     description="エージェントの説明（他エージェントからの参照に使われる）",
     instruction="""
     あなたは役立つアシスタントです。
@@ -88,7 +91,44 @@ root_agent = LlmAgent(
 | `tools` | list | 使用可能なツールのリスト |
 | `output_key` | str | セッション状態への保存キー |
 | `sub_agents` | list | 委譲先サブエージェント |
-| `generate_content_config` | GenerateContentConfig | モデル設定（temperature など） |
+| `generate_content_config` | GenerateContentConfig | モデル設定（temperature, thinking_config など） |
+
+---
+
+### Thinking Level の設定
+
+Gemini 3.x 系モデルでは **Thinking Level** を指定して推論の深さを制御できる。
+複雑なタスク（コード分析、数学的推論、多段階計画）では `HIGH` を推奨。
+
+```python
+from google.adk.agents import LlmAgent
+from google.genai.types import GenerateContentConfig, ThinkingConfig
+
+# Thinking Level = HIGH で深い推論を有効化
+agent = LlmAgent(
+    name="DeepReasoningAgent",
+    model="gemini-3.8-flash",
+    instruction="複雑な問題を段階的に分析し、論理的に回答してください。",
+    generate_content_config=GenerateContentConfig(
+        thinking_config=ThinkingConfig(
+            thinking_level="HIGH"       # LOW / MEDIUM / HIGH
+        ),
+        temperature=0.1,
+        max_output_tokens=8192,
+    ),
+    tools=[...],
+)
+```
+
+**Thinking Level 一覧:**
+| レベル | 用途 | トレードオフ |
+|---|---|---|
+| `LOW` | 高速応答優先。シンプルなタスク | 低レイテンシ・低コスト |
+| `MEDIUM` | バランス型（デフォルト相当） | 中程度 |
+| `HIGH` | 深い推論。コード分析・数学・複雑計画 | 高精度だがレイテンシ・Thinking Token 増加 |
+
+> **⚠️ 注意:** Thinking Level を使う場合、`google-genai` パッケージが v1.51.0 以上であることを確認。
+> ADK v2.8.0 以降では `generate_content_config` に `ThinkingConfig` を直接渡せる。
 
 ---
 
@@ -103,14 +143,14 @@ from google.adk.workflow import Workflow
 # 各エージェントは output_key でセッション状態に結果を保存
 step1 = LlmAgent(
     name="Extractor",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="与えられたデータから重要な情報を抽出してください。",
     output_key="extracted_data"        # state["extracted_data"] に保存
 )
 
 step2 = LlmAgent(
     name="Cleaner",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="""
     以下のデータをクリーニングしてください:
     {extracted_data}                   # state から参照
@@ -120,7 +160,7 @@ step2 = LlmAgent(
 
 step3 = LlmAgent(
     name="Loader",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="クリーニング済みデータ: {clean_data} を適切な形式で保存してください。",
 )
 
@@ -150,21 +190,21 @@ from google.adk.workflow import Workflow
 # 独立した調査エージェント群（並列実行）
 market_agent = LlmAgent(
     name="MarketResearcher",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="市場トレンドを調査してください。",
     output_key="market_data"
 )
 
 competitor_agent = LlmAgent(
     name="CompetitorAnalyzer",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="競合他社の動向を分析してください。",
     output_key="competitor_data"
 )
 
 customer_agent = LlmAgent(
     name="CustomerInsight",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="顧客フィードバックを分析してください。",
     output_key="customer_data"
 )
@@ -172,7 +212,7 @@ customer_agent = LlmAgent(
 # 集約エージェント
 synthesizer = LlmAgent(
     name="Synthesizer",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="""
     以下の調査結果を統合して包括的なレポートを作成してください:
     - 市場データ: {market_data}
@@ -208,7 +248,7 @@ from google.adk.workflow import Workflow
 
 writer = LlmAgent(
     name="Writer",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="""
     以下のトピックについてドラフトを書いてください: {topic}
     
@@ -221,7 +261,7 @@ writer = LlmAgent(
 
 critic = LlmAgent(
     name="Critic",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="""
     以下のドラフトを評価してください: {draft}
     
@@ -281,7 +321,7 @@ def get_weather(city: str) -> dict:
 # 関数を直接 tools リストに渡す（自動で FunctionTool に変換）
 agent = LlmAgent(
     name="WeatherAgent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="天気情報を取得して報告してください。",
     tools=[get_weather]               # 関数を直接渡す
 )
@@ -312,7 +352,7 @@ from google.adk.tools import google_search, code_execution
 
 agent = LlmAgent(
     name="ResearchAgent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="調査と計算を行います。",
     tools=[
         google_search,           # Google 検索
@@ -341,7 +381,7 @@ mcp_tools = MCPToolset(
 
 agent = LlmAgent(
     name="Agent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="MCP ツールを使って作業してください。",
     tools=[mcp_tools]
 )
@@ -424,7 +464,7 @@ from google.adk.agents import LlmAgent
 # 専門エージェント
 order_agent = LlmAgent(
     name="OrderAgent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     description="注文状況の確認を担当します。注文番号に関する質問に答えます。",
     instruction="注文番号を確認して状況を報告してください。",
     tools=[check_order_status]
@@ -432,7 +472,7 @@ order_agent = LlmAgent(
 
 refund_agent = LlmAgent(
     name="RefundAgent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     description="返金処理を担当します。返金リクエストを処理します。",
     instruction="返金条件を確認して処理してください。",
     tools=[process_refund]
@@ -441,7 +481,7 @@ refund_agent = LlmAgent(
 # Coordinator（LLM が自動ルーティング）
 coordinator = LlmAgent(
     name="CustomerServiceCoordinator",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     description="カスタマーサービスのコーディネーター",
     instruction="""
     ユーザーのリクエストを分析し、適切な専門エージェントに委譲してください。
@@ -478,7 +518,7 @@ def after_tool_callback(
 
 agent = LlmAgent(
     name="SafeAgent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="...",
     before_model_callback=before_model_callback,
     after_tool_callback=after_tool_callback,
@@ -544,6 +584,9 @@ adk deploy agent_engine \
 5. **@lru_cache**: 設定オブジェクトとクライアント初期化に使う
 6. **非同期**: `run_async` を使い、同期版は避ける
 7. **description**: サブエージェントには必ず説明を書く（LLM のルーティングに使われる）
+8. **Thinking Level**: 複雑なタスクには `ThinkingConfig(thinking_level="HIGH")` を設定する
+9. **ADK_MAX_LLM_CALLS**: 本番環境では LLM 呼び出し上限を設定して暴走を防ぐ
+10. **location=global**: Vertex AI では `GOOGLE_CLOUD_LOCATION=global` でグローバルエンドポイントを使う
 
 ### DON'T ❌
 1. **モノリシックプロンプト**: 1つのエージェントに多くの責務を持たせない
@@ -551,6 +594,7 @@ adk deploy agent_engine \
 3. **状態共有の競合**: Parallel Workflow で同じ output_key を使わない
 4. **本番での InMemorySessionService**: スケール時に状態が失われる
 5. **sub_agents に Workflow を入れない**: Workflow は `BaseNode` であり `BaseAgent` ではない
+6. **Thinking Level を無条件に HIGH にしない**: リアルタイム応答が必要な場面では LOW/MEDIUM を使う
 
 ---
 
@@ -561,7 +605,7 @@ from google.adk.agents import LlmAgent
 from google.adk.workflow import Workflow
 
 # パターン1: Single Agent
-agent = LlmAgent(name="Agent", model="gemini-2.0-flash", instruction="...", tools=[...])
+agent = LlmAgent(name="Agent", model="gemini-3.8-flash", instruction="...", tools=[...])
 
 # パターン2: Sequential (A → B → C)  ※チェーンタプル
 Workflow(name="Pipeline", edges=[('START', a, b, c)])

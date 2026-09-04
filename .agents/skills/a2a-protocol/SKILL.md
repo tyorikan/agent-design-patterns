@@ -123,7 +123,7 @@ from google.adk.tools import google_search
 # ADK エージェントを定義
 research_agent = LlmAgent(
     name="ResearchAgent",
-    model="gemini-3.5-flash",
+    model="gemini-3.8-flash",
     description="Web 検索と情報収集を担当する専門エージェント",
     instruction="""
     ユーザーのリクエストに基づいて Web 検索を行い、
@@ -190,7 +190,7 @@ remote_research_tool = AgentTool(
 # オーケストレーターエージェント
 orchestrator = LlmAgent(
     name="Orchestrator",
-    model="gemini-3.5-flash",
+    model="gemini-3.8-flash",
     instruction="""
     複雑なタスクを受け取り、適切な専門エージェントに委譲してください。
     調査タスクは Research Agent に委譲してください。

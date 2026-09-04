@@ -42,7 +42,7 @@ User → [LlmAgent + Tools] → Response
 ```python
 agent = LlmAgent(
     name="SingleAgent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="...",
     tools=[tool1, tool2]
 )
@@ -197,7 +197,7 @@ Input → [Thought] → [Action/Tool] → [Observation] → [Thought] → ... �
 # tools を与えると自動的に Thought→Action→Observation ループ
 react_agent = LlmAgent(
     name="ReActAgent",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="段階的に考えながら行動してください。",
     tools=[search_tool, calculator, database_tool]
 )
@@ -220,7 +220,7 @@ User → [Coordinator (LLM)] →           → Response
 ```python
 coordinator = LlmAgent(
     name="Coordinator",
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     instruction="ユーザーのリクエストを分析し適切な専門エージェントに委譲。",
     sub_agents=[specialist_a, specialist_b, specialist_c]
 )

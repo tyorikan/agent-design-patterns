@@ -30,7 +30,7 @@ Vertex AI を使うことで、エンタープライズグレードのセキュ�
 ```bash
 # プロジェクト設定
 export PROJECT_ID="your-project-id"
-export REGION="us-central1"  # Vertex AI が使えるリージョン
+export REGION="global"  # グローバルエンドポイント（推奨。データ残留要件がある場合は us-central1 等を指定）
 
 gcloud config set project $PROJECT_ID
 gcloud config set compute/region $REGION
@@ -73,8 +73,8 @@ uv init my-agent
 cd my-agent
 
 # 依存関係を追加
-uv add "google-adk>=2.1.0"
-uv add google-cloud-aiplatform
+uv add "google-adk>=2.8.0"
+uv add "google-genai>=2.22.0"
 
 # 開発用
 uv add --dev pytest pytest-asyncio ruff mypy
@@ -86,8 +86,9 @@ uv add --dev pytest pytest-asyncio ruff mypy
 # .env ファイルに記載（.gitignore に追加必須！）
 cat > .env << EOF
 GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
-GOOGLE_CLOUD_LOCATION=${REGION}
+GOOGLE_CLOUD_LOCATION=global
 GOOGLE_GENAI_USE_VERTEXAI=True
+ADK_MAX_LLM_CALLS=500
 EOF
 ```
 
@@ -103,12 +104,17 @@ class Settings(BaseSettings):
     """アプリケーション設定。環境変数から読み込む。"""
     
     google_cloud_project: str
-    google_cloud_location: str = "us-central1"
+    google_cloud_location: str = "global"
     google_genai_use_vertexai: bool = True
     
     # モデル設定
-    default_model: str = "gemini-3.5-flash"
-    pro_model: str = "gemini-3.5-pro"
+    default_model: str = "gemini-3.8-flash"
+    
+    # Thinking Level (LOW / MEDIUM / HIGH)
+    thinking_level: str = "MEDIUM"
+    
+    # LLM 呼び出し上限 (ADK v2.8.0+)
+    adk_max_llm_calls: int = 500
     
     # エージェント設定
     max_loop_iterations: int = 5
@@ -146,21 +152,35 @@ uv run ruff check .
 
 | モデル | 用途 | コスト |
 |---|---|---|
-| `gemini-3.5-flash` | 高速・低コスト（デフォルト推奨） | 低 |
-| `gemini-3.5-flash-thinking` | 推論が必要な複雑タスク | 中 |
-| `gemini-3.5-pro` | 最高精度 | 高 |
-| `gemini-2.5-flash` | フォールバック用 | 低 |
+| `gemini-3.8-flash` | 高速・高精度（最新推奨） | 低 |
+| `gemini-3.8-flash` + `thinking_level=HIGH` | 深い推論が必要な複雑タスク | 中 |
+| `gemini-3.5-flash` | フォールバック用 | 低 |
+
+> **Note:** gemini-3.8-flash は `location=global` で利用可能。
+> Thinking Level は旧 `-thinking` モデル名の代わりに `ThinkingConfig` で制御する。
 
 ```python
-from google.genai.types import GenerateContentConfig
+from google.genai.types import GenerateContentConfig, ThinkingConfig
 
-# モデル設定例
+# 標準設定（高速応答）
 agent = LlmAgent(
-    model="gemini-3.5-flash",
+    model="gemini-3.8-flash",
     generate_content_config=GenerateContentConfig(
-        temperature=0.1,      # 一貫性重視
+        temperature=0.1,
         max_output_tokens=8192,
         top_p=0.95,
+    )
+)
+
+# 深い推論が必要なタスク（Thinking Level = HIGH）
+deep_agent = LlmAgent(
+    model="gemini-3.8-flash",
+    generate_content_config=GenerateContentConfig(
+        thinking_config=ThinkingConfig(
+            thinking_level="HIGH"  # LOW / MEDIUM / HIGH
+        ),
+        temperature=0.1,
+        max_output_tokens=8192,
     )
 )
 ```
