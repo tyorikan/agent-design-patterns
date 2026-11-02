@@ -1,0 +1,46 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "bigquery_spike_diagnosis",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "BigQuery の日次コストが急増しています。原因と推奨アクションを調査してください。"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "BigQuery の日次コストはベースライン $120 から $540（4.5倍）に急増しています。原因はパーティションフィルタなしのフルスキャン集計クエリで、対策は require_partition_filter=true の設定と BI キャッシュ有効化です。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "savings_calculation_exact",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "月額 $2,000 のワークロードを 60% 削減できた場合、月間・年間の削減額と対策後の月額を試算してください。"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "月間削減額は $1,200、年間削減額は $14,400、対策後の予測月額は $800 です。"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

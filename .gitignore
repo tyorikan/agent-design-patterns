@@ -49,5 +49,7 @@ key.json
 # Agentic Pipeline 出力（PGE ループで生成されたコード）
 patterns/agentic_pipeline/output/
 
-# ADK
+# ADK / agents-cli 実行時キャッシュ・生成物
 .adk/
+.google-agents-cli/
+**/artifacts/

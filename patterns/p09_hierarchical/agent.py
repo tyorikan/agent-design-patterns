@@ -1,26 +1,22 @@
-"""Hierarchical Task Decomposition Pattern - 競合分析レポート自動生成（修正版）。
+"""Hierarchical Task Decomposition Pattern - 競合分析レポート自動生成。
 
-ADK の {変数名} の注意:
-    - セッション状態に存在しないキーを参照するとエラー
-    - Hierarchical では Root → Coordinator → Worker の順に実行されるが、
-      最初のエージェント（Web Researcher など）にはセッション状態が空
-    - 最初に実行されるエージェントは {変数} を使わずユーザーメッセージから読み取る
+パターンの特徴:
+    3 層の `LlmAgent` ツリー（Root → 部門 Coordinator → 専門 Worker）による階層的タスク分解。
 
-フロー:
-    root_agent（Coordinator）
-        ├── research_coordinator
-        │   ├── web_researcher（公式情報調査、ユーザーメッセージから読み取り）
-        │   └── news_researcher（ニュース調査、{web_research_data}を参照）
-        ├── analysis_coordinator
-        │   ├── financial_analyst（{web_research_data}を参照）
-        │   └── tech_analyst（{web_research_data},{news_research_data}を参照）
-        └── report_coordinator（全データを参照）
+⚠️ 動的委譲における状態参照の安全設計:
+    `sub_agents` による LLM 委譲では、親エージェントの判断によってワーカーの呼び出し順序が変わったり、
+    一部のワーカーが省略されたりする可能性がある。
+    そのため、後続エージェントの `instruction` で `{web_research_data}` のような固定文字列テンプレートを
+    直接使うと未設定時に `KeyError` が発生する。
+    本実装では `ReadonlyContext.state.get(..., "（未取得）")` を用いた callable instruction により、
+    委譲順序に依存せず安全に動作する設計としている。
 """
 
 import sys
 from pathlib import Path
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.readonly_context import ReadonlyContext
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -28,10 +24,10 @@ from shared.config import get_settings
 
 settings = get_settings()
 
+
 # =====================================================
 # Layer 3: Worker エージェント
 # =====================================================
-
 web_researcher = LlmAgent(
     name="web_researcher",
     model=settings.default_model,
@@ -50,15 +46,15 @@ web_researcher = LlmAgent(
     output_key="web_research_data",
 )
 
-news_researcher = LlmAgent(
-    name="news_researcher",
-    model=settings.default_model,
-    description="最新ニュースや業界動向を調査する",
-    instruction="""
+
+async def _build_news_researcher_instruction(ctx: ReadonlyContext) -> str:
+    """基礎調査データが存在すれば参照し、未取得でも安全にニュース調査を行う。"""
+    web_data = ctx.state.get("web_research_data", "（基礎調査データ未取得 — ユーザー依頼から直接特定）")
+    return f"""
 あなたはニュース調査のスペシャリストです。
 以下の企業情報を踏まえて、最新ニュースを調査してください:
 
-{web_research_data}
+{web_data}
 
 調査項目:
 - 直近6ヶ月の主要ニュース（製品発表、提携、買収など）
@@ -67,20 +63,27 @@ news_researcher = LlmAgent(
 - 将来の脅威とリスク要因
 
 調査結果を時系列で箇条書きにまとめてください。
-""",
+"""
+
+
+news_researcher = LlmAgent(
+    name="news_researcher",
+    model=settings.default_model,
+    description="最新ニュースや業界動向を調査する",
+    instruction=_build_news_researcher_instruction,
     output_key="news_research_data",
 )
 
-financial_analyst = LlmAgent(
-    name="financial_analyst",
-    model=settings.default_model,
-    description="財務パフォーマンスと市場評価を分析する",
-    instruction="""
+
+async def _build_financial_analyst_instruction(ctx: ReadonlyContext) -> str:
+    """基礎調査データを安全に参照して財務分析を行う。"""
+    web_data = ctx.state.get("web_research_data", "（基礎調査データ未取得）")
+    return f"""
 あなたは財務アナリストです。
 以下のデータを基に財務分析を行ってください:
 
 --- 企業情報 ---
-{web_research_data}
+{web_data}
 
 分析項目:
 - 収益成長率と利益率のトレンド
@@ -89,23 +92,31 @@ financial_analyst = LlmAgent(
 - 財務的な強み・弱み
 
 分析結果を数値と根拠を含めて記述してください。
-""",
+"""
+
+
+financial_analyst = LlmAgent(
+    name="financial_analyst",
+    model=settings.default_model,
+    description="財務パフォーマンスと市場評価を分析する",
+    instruction=_build_financial_analyst_instruction,
     output_key="financial_analysis",
 )
 
-tech_analyst = LlmAgent(
-    name="tech_analyst",
-    model=settings.default_model,
-    description="技術力・イノベーション能力を分析する",
-    instruction="""
+
+async def _build_tech_analyst_instruction(ctx: ReadonlyContext) -> str:
+    """基礎調査データと最新ニュースを安全に参照して技術力分析を行う。"""
+    web_data = ctx.state.get("web_research_data", "（基礎調査データ未取得）")
+    news_data = ctx.state.get("news_research_data", "（ニュース調査データ未取得）")
+    return f"""
 あなたは技術アナリストです。
 以下のデータを基に技術力を分析してください:
 
 --- 企業情報 ---
-{web_research_data}
+{web_data}
 
 --- 最新ニュース ---
-{news_research_data}
+{news_data}
 
 分析項目:
 - コア技術と差別化要因
@@ -115,7 +126,14 @@ tech_analyst = LlmAgent(
 - 技術的な強み・弱み
 
 技術的な観点から競争優位性を評価してください。
-""",
+"""
+
+
+tech_analyst = LlmAgent(
+    name="tech_analyst",
+    model=settings.default_model,
+    description="技術力・イノベーション能力を分析する",
+    instruction=_build_tech_analyst_instruction,
     output_key="tech_analysis",
 )
 
@@ -152,27 +170,30 @@ financial_analyst に財務分析を、tech_analyst に技術分析を依頼し�
     sub_agents=[financial_analyst, tech_analyst],
 )
 
-report_coordinator = LlmAgent(
-    name="report_coordinator",
-    model=settings.default_model,
-    description="全分析結果を統合してエグゼクティブレポートを作成する",
-    instruction="""
+
+async def _build_report_coordinator_instruction(ctx: ReadonlyContext) -> str:
+    """全ワーカーの収集・分析データを安全に集約して経営層向けレポートを作成する。"""
+    web_data = ctx.state.get("web_research_data", "（未取得）")
+    news_data = ctx.state.get("news_research_data", "（未取得）")
+    fin_data = ctx.state.get("financial_analysis", "（未取得）")
+    tech_data = ctx.state.get("tech_analysis", "（未取得）")
+    return f"""
 あなたは戦略コンサルタントです。
 以下の全分析データを統合して、経営層向けの競合分析レポートを作成してください。
 
 ## 収集・分析データ
 
 ### 基礎調査
-{web_research_data}
+{web_data}
 
 ### 最新ニュース
-{news_research_data}
+{news_data}
 
 ### 財務分析
-{financial_analysis}
+{fin_data}
 
 ### 技術分析
-{tech_analysis}
+{tech_data}
 
 ---
 
@@ -197,7 +218,14 @@ report_coordinator = LlmAgent(
 （自社への影響と推奨アクション3点）
 
 ## 結論
-""",
+"""
+
+
+report_coordinator = LlmAgent(
+    name="report_coordinator",
+    model=settings.default_model,
+    description="全分析結果を統合してエグゼクティブレポートを作成する",
+    instruction=_build_report_coordinator_instruction,
 )
 
 # =====================================================
@@ -209,7 +237,7 @@ root_agent = LlmAgent(
     description="競合分析の全プロセスを統括するルートエージェント",
     instruction="""
 あなたは競合分析プロジェクトの統括ディレクターです。
-ユーザーの依頼を受け取り、以下のチームに分析を指示してください:
+ユーザーの依頼を受け取り、以下のチームに順番に分析を指示してください:
 
 1. research_coordinator に基礎調査を依頼
 2. analysis_coordinator に詳細分析を依頼

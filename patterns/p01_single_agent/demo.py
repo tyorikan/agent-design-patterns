@@ -5,12 +5,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from agent import root_agent
+from patterns.p01_single_agent.agent import root_agent
 from shared.demo_runner import run_demo
 
 DEMO_QUERIES = [
-    "Cloud Run と Cloud Functions の違いを教えてください。どちらを選ぶべきですか？",
-    "Vertex AI で Gemini 3.5 Flash を使う最小限のPythonコードを教えてください",
+    "Cloud Run と Cloud Run functions の違いを教えてください。どちらを選ぶべきですか？",
+    "Gemini Enterprise Agent Platform (Vertex AI) で Gemini 3.8 Flash を使う最小限の Python コードを教えてください",
     "Spanner と BigQuery の使い分けを教えてください",
 ]
 
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("Lv.1 Single Agent パターン - GCP ドキュメント Q&A")
     print("=" * 60)
-    print("1つの LlmAgent が google_search を使って自律的に回答します")
+    print("1つの LlmAgent が google_search と get_current_date を使って自律的に回答します")
     print()
 
     run_demo(

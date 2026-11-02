@@ -19,198 +19,98 @@ pip install -e ".[dev]"
 
 # 環境変数の設定
 cp .env.example .env
-# .env を編集して GOOGLE_CLOUD_PROJECT を設定
+# .env を編集して GOOGLE_CLOUD_PROJECT を設定（GOOGLE_CLOUD_LOCATION=global 推奨）
 
-# Vertex AI 認証
+# Google Cloud ADC 認証
 gcloud auth application-default login
 ```
 
-## プロジェクト構造
+## プロジェクト構造（3 トラック構成）
 
 ```
 agent-design-patterns/
-├── patterns/                 # 各デザインパターンの実装
-│   ├── p01_single_agent/     # Lv.1〜11 + capstone
-│   │   ├── README.md        # 概念・図解・学習ポイント
-│   │   ├── agent.py         # エージェント定義（root_agent を export）
-│   │   └── demo.py          # デモスクリプト
-│   └── ...
-├── shared/                   # 共通ライブラリ
-│   ├── config.py            # Settings + @lru_cache
-│   └── demo_runner.py       # デモ実行ユーティリティ
-├── tests/                    # テストピラミッド
-│   ├── README.md            # テスト戦略ドキュメント
-│   ├── unit/                # Lv.1: 決定的テスト（LLM なし）
-│   └── integration/         # Lv.2: 統合テスト（実 LLM）
-├── conftest.py               # テスト共通ヘルパー
+├── patterns/                     # Track 1: 基礎・応用オーケストレーションパターン（Lv.1〜11 + Capstone + PGE）
+│   └── p01_single_agent/
+│       ├── README.md            # 概念・図解・トレードオフ・学習ポイント
+│       ├── agent.py             # エージェント定義（root_agent を export）
+│       └── demo.py              # デモスクリプト
+├── agents_cli_patterns/          # Track 2: agents-cli によるライフサイクル管理デザインパターン（CLI-01〜04）
+│   └── cli01_spec_driven_agent/
+│       ├── README.md
+│       ├── agent.yaml           # 宣言的マニフェスト
+│       ├── specs/               # AGENT_SPEC.md 等の仕様書
+│       └── app/                 # agent.py（app と root_agent を export）
+├── production_patterns/          # Track 3: 本番運用デザインパターン（PROD-01〜06）
+│   └── prod01_contract_based_execution/
+│       ├── README.md
+│       ├── agent.py             # Workflow / Plugin / Agent 実装
+│       └── demo.py
+├── shared/                       # 共通ライブラリ
+│   ├── config.py                # Settings（Gemini 3.8 Flash / global 既定）
+│   └── demo_runner.py           # LlmAgent / Workflow 両対応のデモ実行ランナー
+├── docs/                         # 移行ガイド等の技術ドキュメント
+├── tests/                        # テストピラミッド
+│   ├── README.md
+│   ├── unit/                    # Lv.1: 決定的テスト + ScriptedLlm インプロセス結合テスト
+│   └── integration/             # Lv.2: 実 LLM 統合テスト
+├── conftest.py                   # 3 トラック共通テストヘルパー
 ├── pyproject.toml
 └── README.md
 ```
 
-## 新しいパターンの追加方法
+## デザインパターンの記述原則
 
-### 1. ディレクトリ作成
+新しいパターンを追加する際は、単なるサンプルスクリプトではなく**再利用可能なデザインパターン**として以下を満たしてください。
 
-```bash
-mkdir -p patterns/XX_pattern_name
-```
+1. **平易で自明なソフトウェア工学用語を使う**: 独自の造語、製造業スラング、文脈を知らない読者に伝わらない比喩表現は使用しない。
+2. **「できること」だけでなく「できないこと・不向きな条件」を明記する**: すべてのパターンにはトレードオフ（レイテンシ増加、実装コスト、統計的前提など）が存在するため、`いつ使うか` セクションに適用限界を正直に記載する。
+3. **公開リポジトリの衛生管理**: 特定の顧客名、内部プロジェクト名、実プロジェクト ID、認証情報は一切含めない。
 
-### 2. 必須ファイル
-
-| ファイル | 内容 |
-|---------|------|
-| `README.md` | 概念・図解・トレードオフ・学習ポイント |
-| `agent.py` | エージェント定義（`root_agent` を export） |
-| `demo.py` | デモスクリプト |
-
-### 3. agent.py のルール
-
-```python
-# 共通パターン: shared/config.py から設定を読み込む
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from shared.config import get_settings
-
-settings = get_settings()
-
-# root_agent を定義（ADK Web UI から参照される）
-root_agent = LlmAgent(
-    name="unique_agent_name",  # ユニークな名前
-    model=settings.default_model,
-    description="...",
-    instruction="...",
-)
-```
-
-### 4. README.md の標準フォーマット
+### README.md の標準フォーマット
 
 ```markdown
-# Lv.X パターン名
+# パターン名
 
-## 概念
-## いつ使うか
-## 前のパターンとの違い（比較表）
+## 概念（Mermaid または ASCII 図解を含む）
+## いつ使うか（適している場合 / 不向きな場合・できないこと）
+## 関連パターンとの違い（比較表）
 ## このデモのユースケース
-## アーキテクチャ（ASCII 図）
+## アーキテクチャと実装のポイント
 ## トレードオフ（表）
 ## 実行方法
 ## 学習ポイント
 ## 次のステップ
 ```
 
-### 4. テストの追加方法
-
-パターンを追加したら、以下の2ファイルにテストを追加する:
-
-#### Lv.1 構成テスト (`tests/unit/test_agent_structure.py`)
-
-```python
-class TestNewPatternStructure:
-    def setup_method(self):
-        self.mod = load_pattern_agent("XX_pattern_name")
-
-    def test_root_agent_name(self):
-        assert self.mod.root_agent.name == "expected_name"
-
-    # LlmAgent パターンの場合
-    def test_sub_agents_count(self):
-        assert len(self.mod.root_agent.sub_agents) == N
-
-    # Workflow パターンの場合
-    def test_root_agent_is_workflow(self):
-        from google.adk.workflow import Workflow
-        assert isinstance(self.mod.root_agent, Workflow)
-
-    def test_graph_has_expected_nodes(self):
-        node_names = [n.name for n in self.mod.root_agent.graph.nodes]
-        assert "expected_node" in node_names
-```
-
-#### Lv.2 統合テスト (`tests/integration/test_patterns.py`)
-
-プロパティベース + トラジェクトリ検証を使用する:
-
-```python
-class TestNewPattern:
-    @pytest.mark.asyncio
-    async def test_pattern_works(self):
-        mod = load_pattern_agent("XX_pattern_name")
-        response, trajectory = await run_agent_trajectory(
-            mod.root_agent, "app_name", "テストクエリ"
-        )
-        # プロパティ: 十分な長さの出力
-        assert len(response) > 100
-        # トラジェクトリ: 正しいエージェントが発言
-        assert "expected_agent" in trajectory
-```
-
-詳細は [tests/README.md](tests/README.md) を参照。
-
 ## コーディング規約
 
-### Python コード
-
-- **フォーマッター**: `ruff format`
-- **リンター**: `ruff check`
+- **フォーマッター / リンター**: `ruff format`, `ruff check`
 - **型チェック**: `mypy`
-- **行長**: 100文字
-- **型アノテーション**: 必須
-- **docstring**: 全ての関数・クラスに必須
+- **行長**: 100 文字
+- **型アノテーション・Docstring**: 全ての公開関数・クラスに必須
 
 ```bash
-# リント & フォーマット
-ruff check --fix .
-ruff format .
-
-# 型チェック
-mypy shared/
-```
-
-### コミットメッセージ
-
-```
-feat(pattern-XX): パターン名の追加
-fix(pattern-XX): バグ修正の説明
-docs(pattern-XX): README の更新
-test(pattern-XX): テストの追加
-chore: プロジェクト設定の変更
+# リント & 型チェック
+.venv/bin/ruff check .
+.venv/bin/mypy shared/ production_patterns/
 ```
 
 ## テストの実行
 
 ```bash
-# Lv.1 ユニットテスト（高速、CI の必須ステップ）
-pytest tests/unit/ -v
+# Lv.1 ユニットテスト（外部通信なし・約 4 秒、CI 必須ステップ）
+.venv/bin/pytest tests/unit/ -v
 
-# Lv.2 統合テスト（Vertex AI ADC 必要）
-pytest tests/integration/ -v
-
-# 全テスト
-pytest tests/ -v
-
-# カバレッジ付き
-pytest tests/ --cov=shared --cov-report=term-missing
-```
-
-## デモの実行
-
-```bash
-# 各パターンのデモ
-PYTHONPATH=. python3 patterns/p01_single_agent/demo.py
-
-# ADK Web UI（全パターンを対話的にテスト）
-docker compose up
-# → http://localhost:8080
+# Lv.2 統合テスト（Google Cloud ADC 必要）
+.venv/bin/pytest tests/integration/ -v
 ```
 
 ## レビューのチェックリスト
 
-- [ ] `agent.py` に `root_agent` が定義されている
-- [ ] `demo.py` が単独で実行できる
-- [ ] `README.md` が標準フォーマットに従っている
-- [ ] `tests/unit/test_agent_structure.py` に構成テストが追加されている
+- [ ] `agent.py` に `root_agent`（および必要に応じて `app`）が定義されている
+- [ ] `README.md` が標準フォーマットに従い、適用限界（できないこと）が明記されている
+- [ ] 独自の造語や比喩表現を含まず、デザインパターンとして平易に説明されている
+- [ ] `tests/unit/` に外部通信なしの決定論的テストが追加されている
 - [ ] `tests/integration/test_patterns.py` に統合テストが追加されている
-- [ ] `ruff check` がパスする
-- [ ] `pytest tests/unit/ -v` がパスする
+- [ ] `.venv/bin/ruff check .` と `.venv/bin/mypy shared/ production_patterns/` がパスする
+- [ ] `.venv/bin/pytest tests/unit/ -v` が全件パスする

@@ -73,8 +73,8 @@ uv init my-agent
 cd my-agent
 
 # 依存関係を追加
-uv add "google-adk>=2.8.0"
-uv add "google-genai>=2.22.0"
+uv add "google-adk>=2.13.0"
+uv add "google-genai>=2.30.0"
 
 # 開発用
 uv add --dev pytest pytest-asyncio ruff mypy
@@ -152,12 +152,13 @@ uv run ruff check .
 
 | モデル | 用途 | コスト |
 |---|---|---|
-| `gemini-3.8-flash` | 高速・高精度（最新推奨） | 低 |
+| `gemini-3.8-flash` | 高速・高精度（最新 GA 推奨） | 低 |
 | `gemini-3.8-flash` + `thinking_level=HIGH` | 深い推論が必要な複雑タスク | 中 |
-| `gemini-3.5-flash` | フォールバック用 | 低 |
+| `gemini-3.5-flash-lite` | 超低レイテンシ・一次分類・カスケード前段 | 最安 |
+| `gemini-4-argon` | 最上位フロンティア推論・高難度エスカレーション（GA） | 高 |
 
-> **Note:** gemini-3.8-flash は `location=global` で利用可能。
-> Thinking Level は旧 `-thinking` モデル名の代わりに `ThinkingConfig` で制御する。
+> **Note:** `gemini-3.8-flash` および `gemini-4-argon` は `location=global` / `us` / `eu` 等で利用可能（`us-central1` 単一リージョンは非対応）。
+> また、両モデルとも `thinking_level` は `LOW` / `MEDIUM` / `HIGH` のみ対応しており、`MINIMAL` を指定すると HTTP 400 バリデーションエラーになる（`gemini-4-argon` では `temperature` / `top_p` / `top_k` も無視されるため指定不要）。
 
 ```python
 from google.genai.types import GenerateContentConfig, ThinkingConfig

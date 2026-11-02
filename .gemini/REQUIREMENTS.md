@@ -71,10 +71,10 @@ Google Cloud のアーキテクチャガイドに基づき、AI エージェン�
 
 ## 技術要件
 
-- Python 3.12+
-- Google ADK Python 2.1+（Workflow API 使用）
-- Antigravity SDK（google-antigravity） — Gemini ベースの自律エージェント
-- Vertex AI Gemini 3.5 Flash（デフォルト）
+- Python 3.11+（開発推奨 3.12+）
+- Google ADK Python 2.13+（Workflow API 使用）
+- Antigravity SDK 0.1.23+（google-antigravity） — Gemini ベースの自律エージェント
+- Gemini Enterprise Agent Platform `gemini-3.8-flash`（デフォルト）/ `gemini-3.5-flash-lite`（軽量）/ `gemini-4-argon`（最上位推論）
 - パッケージ管理: pip (pyproject.toml) + uv (Docker)
 - テスト: pytest + pytest-asyncio（2層テストピラミッド）
 

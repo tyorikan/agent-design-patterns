@@ -4,12 +4,12 @@ Antigravity Agent の structured output で使用する。
 ノード間の受け渡しデータを型保証し、自律エージェント出力の予測不能性を軽減する。
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """品質問題の重大度。"""
 
     CRITICAL = "CRITICAL"  # 必ず修正が必要（テスト失敗、セキュリティ脆弱性）

@@ -1,6 +1,7 @@
 """Calculatorクラスのテストモジュール。"""
 
 import pytest
+
 from shared.calculator import Calculator
 
 

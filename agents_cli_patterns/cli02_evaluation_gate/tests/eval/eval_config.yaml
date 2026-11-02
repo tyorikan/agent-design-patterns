@@ -1,0 +1,24 @@
+metrics_to_run:
+  - custom_response_quality
+  - non_empty_structured_answer
+  - agent_turn_count
+
+custom_metrics:
+  # 1. ローカル LLM-as-a-Judge（gemini-3.8-flash による 1〜5 段階ルーブリック採点）
+  - name: custom_response_quality
+    custom_function_file: response_quality.py
+
+  # 2. 決定論的 Python 採点（空応答でなく、十分な長さの回答を返しているか）
+  - name: non_empty_structured_answer
+    custom_function: |
+      def evaluate(instance):
+          text = (instance.get("response") or "").strip()
+          score = 1.0 if len(text) >= 30 else 0.0
+          return {"score": score}
+
+  # 3. トレース上のターン数計測（1 ターン以上実行されているか）
+  - name: agent_turn_count
+    custom_function: |
+      def evaluate(instance):
+          turns = (instance.get("agent_data") or {}).get("turns", [])
+          return {"score": float(len(turns))}

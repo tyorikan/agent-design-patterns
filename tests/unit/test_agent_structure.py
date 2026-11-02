@@ -1,16 +1,15 @@
-"""Lv.1 ユニットテスト: 全12パターンのエージェント構成を決定的に検証。
+"""Lv.1 ユニットテスト: 全13パターンのエージェント構成を決定的に検証。
 
 LLM を呼び出さない。エージェントの名前、型、Workflow の edges 構造、
-output_key の設定を検証する。ミリ秒で完了する。
+JoinNode バリア同期、@node ルーター、output_key の設定を検証する。ミリ秒で完了する。
 
 ADK v2: SequentialAgent/ParallelAgent/LoopAgent → Workflow に移行済み。
 """
 
-from pathlib import Path
 
 import pytest
 from google.adk.agents import LlmAgent
-from google.adk.workflow import Workflow
+from google.adk.workflow import JoinNode, Workflow
 
 from conftest import load_pattern_agent
 
@@ -111,8 +110,16 @@ class TestParallelStructure:
     def test_researchers_have_unique_output_keys(self):
         """各リサーチャーは固有の output_key を持つ。"""
         nodes = [n for n in self.mod.root_agent.graph.nodes if isinstance(n, LlmAgent)]
-        researcher_keys = [n.output_key for n in nodes if n.output_key and n.name != "news_synthesizer"]
+        researcher_keys = [n.output_key for n in nodes if n.output_key and n.name != "synthesizer"]
         assert len(researcher_keys) == len(set(researcher_keys)), f"output_key が重複: {researcher_keys}"
+
+    def test_graph_has_join_node_before_synthesizer(self):
+        """並列リサーチャーと synthesizer の間に JoinNode バリア同期がある。"""
+        join_nodes = [n for n in self.mod.root_agent.graph.nodes if isinstance(n, JoinNode)]
+        assert len(join_nodes) == 1
+        assert join_nodes[0].name == "join_research"
+        edges = [(e.from_node.name, e.to_node.name) for e in self.mod.root_agent.graph.edges]
+        assert ("join_research", "synthesizer") in edges
 
 
 # =====================================================
@@ -137,6 +144,8 @@ class TestLoopStructure:
         node_names = [n.name for n in self.mod.root_agent.graph.nodes]
         assert "code_generator" in node_names
         assert "code_tester" in node_names
+        assert "loop_router" in node_names
+        assert "finalize_code" in node_names
 
 
 # =====================================================
@@ -269,9 +278,13 @@ class TestHumanInTheLoopStructure:
         assert self.mod.content_creator.output_key == "generated_content"
 
     def test_compliance_checker_exists(self):
-        """compliance_checker が定義されている。"""
+        """compliance_checker・ルーター・人間承認ゲート・Resumable App が定義されている。"""
         assert hasattr(self.mod, "compliance_checker")
         assert self.mod.compliance_checker.name == "compliance_checker"
+        node_names = {n.name for n in self.mod.root_agent.graph.nodes}
+        assert {"compliance_router", "human_review_gate", "rejection_notifier"}.issubset(node_names)
+        assert self.mod.app.resumability_config is not None
+        assert self.mod.app.resumability_config.is_resumable is True
 
 
 # =====================================================
@@ -303,9 +316,12 @@ class TestCapstoneStructure:
         assert len(coordinator_edges) >= 3, f"fan-out エッジが3つ以上必要: {coordinator_edges}"
 
     def test_graph_has_cycle_edge(self):
-        """レポート改善の条件付きサイクルエッジがある。"""
+        """レポート改善の条件付きサイクルエッジと JoinNode バリアがある。"""
         cycle_edges = [e for e in self.mod.root_agent.graph.edges if e.route is not None]
         assert len(cycle_edges) > 0
+        node_names = {n.name for n in self.mod.root_agent.graph.nodes}
+        assert "join_enterprise_research" in node_names
+        assert "report_review_router" in node_names
 
 
 # =====================================================
@@ -325,7 +341,6 @@ class TestAgenticPipelineStructure:
 
     def test_root_agent_is_pge_orchestrator(self):
         """PGEOrchestrator クラスのインスタンスである。"""
-        from patterns.agentic_pipeline.agent import PGEOrchestrator
         # モジュール二重ロード問題を回避
         assert type(self.mod.root_agent).__name__ == "PGEOrchestrator"
 
@@ -388,4 +403,132 @@ class TestAgenticPipelineStructure:
         )
         assert "2/3" in prompt
         assert "[65]" in prompt
+
+    def test_antigravity_config_builder(self, tmp_path):
+        """Antigravity 0.1.23+ の LocalAgentConfig（Capabilities / Budget / Sandbox / AppData）を検証する。"""
+        import sys
+        from pathlib import Path
+
+        from google.antigravity.types import BuiltinTools
+
+        from patterns.agentic_pipeline.tools import STAGE_BUDGET_LIMITS, _build_config
+
+        app_data = tmp_path / "agy_data"
+        app_data.mkdir()
+        ws = tmp_path / "out"
+        ws.mkdir()
+
+        planner_cfg = _build_config(
+            system_instructions="Planner test",
+            allow_commands=False,
+            allow_writes=False,
+            workspace_dir=str(ws),
+            stage="planner",
+            app_data_dir=str(app_data),
+        )
+        assert planner_cfg.capabilities.enable_subagents is False
+        assert planner_cfg.capabilities.run_command_config is None
+        assert planner_cfg.capabilities.disabled_tools is not None
+        assert BuiltinTools.CREATE_FILE in planner_cfg.capabilities.disabled_tools
+        assert planner_cfg.budget_config is not None
+        assert planner_cfg.budget_config.max_model_calls == STAGE_BUDGET_LIMITS["planner"][0]
+        assert planner_cfg.compaction_config is not None
+        assert planner_cfg.compaction_config.token_threshold == 120_000
+        assert planner_cfg.app_data_dir == str(app_data.resolve())
+
+        ro_cfg = _build_config(
+            system_instructions="Evaluator test",
+            allow_commands=True,
+            allow_writes=False,
+            workspace_dir=str(ws),
+            stage="evaluator",
+        )
+        assert ro_cfg.capabilities.disabled_tools is not None
+        assert BuiltinTools.CREATE_FILE in ro_cfg.capabilities.disabled_tools
+        assert BuiltinTools.EDIT_FILE in ro_cfg.capabilities.disabled_tools
+        assert ro_cfg.capabilities.run_command_config is not None
+        assert ro_cfg.capabilities.run_command_config.enable_sandbox is True
+        assert ro_cfg.capabilities.run_command_config.timeout_seconds == 120.0
+        assert ro_cfg.budget_config is not None
+        assert ro_cfg.budget_config.max_tool_calls == STAGE_BUDGET_LIMITS["evaluator"][1]
+
+        rw_cfg = _build_config(
+            system_instructions="Generator test",
+            allow_commands=True,
+            allow_writes=True,
+            workspace_dir=str(ws),
+            stage="generator",
+        )
+        assert rw_cfg.capabilities.disabled_tools is None
+        assert rw_cfg.env is not None
+        venv_bin = str(Path(sys.executable).resolve().parent)
+        assert venv_bin in rw_cfg.env["PATH"]
+
+    @pytest.mark.asyncio
+    async def test_antigravity_policy_enforcement_allows_workspace_and_blocks_mutations(
+        self, tmp_path
+    ):
+        """9段階優先度ポリシーが create_file / finish / 検証コマンドを許可し、危険コマンドを拒否する。"""
+        from google.antigravity import types as agy_types
+        from google.antigravity.hooks import hooks, policy
+        from google.antigravity.proto import localharness_pb2
+
+        from patterns.agentic_pipeline.tools import _build_config
+
+        cfg = _build_config(
+            system_instructions="Generator policy test",
+            allow_commands=True,
+            allow_writes=True,
+            workspace_dir=str(tmp_path),
+            stage="generator",
+        )
+        proto_cfg, _ = policy._to_policy_config_proto(cfg.policies)
+        assert (
+            proto_cfg.workspace_containment
+            != localharness_pb2.PolicyConfig.WORKSPACE_CONTAINMENT_DISABLED
+        )
+
+        decide_hook = policy.enforce(cfg.policies)
+        ctx = hooks.HookContext()
+
+        # ファイル作成・閲覧・終了ツールが Fail-Closed にならず許可されること
+        for tool_name in ("create_file", "edit_file", "view_file", "finish"):
+            res = await decide_hook.run(
+                ctx, agy_types.ToolCall(name=tool_name, args={})
+            )
+            assert res.allow is True, f"{tool_name} が拒否されました: {res.message}"
+
+        # 正当なテスト・lint コマンドが許可されること
+        for allowed_cmd in (
+            "pytest -q",
+            "python3 -m pytest",
+            "PYTHONPATH=src pytest tests/",
+            f"cd {tmp_path} && ruff check .",
+            "ls -la",
+        ):
+            res = await decide_hook.run(
+                ctx,
+                agy_types.ToolCall(
+                    name="run_command", args={"CommandLine": allowed_cmd}
+                ),
+            )
+            assert res.allow is True, f"許可されるべきコマンドが拒否されました: {allowed_cmd}"
+
+        # 破壊的・自動書き換え・未許可コマンドが優先拒否されること
+        for blocked_cmd in (
+            "ruff check --fix .",
+            "rm -rf /tmp/something",
+            "pytest && rm -rf .",
+            "sudo apt update",
+            "git push origin main",
+        ):
+            res = await decide_hook.run(
+                ctx,
+                agy_types.ToolCall(
+                    name="run_command", args={"CommandLine": blocked_cmd}
+                ),
+            )
+            assert res.allow is False, f"拒否されるべきコマンドが許可されました: {blocked_cmd}"
+
+
 

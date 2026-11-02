@@ -4,12 +4,17 @@ services:
     build: .
     container_name: agent-design-patterns
     environment:
-      # Vertex AI 認証（ADC のみ・API Key 不使用）
+      # Gemini Enterprise Agent Platform (Vertex AI) 認証（ADC のみ・API Key 不使用）
+      - GOOGLE_GENAI_USE_ENTERPRISE=True
       - GOOGLE_GENAI_USE_VERTEXAI=True
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-global}
       # アプリ設定
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.5-flash}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.8-flash}
+      - FAST_MODEL=${FAST_MODEL:-gemini-3.5-flash-lite}
+      - ESCALATION_MODEL=${ESCALATION_MODEL:-gemini-4-argon}
+      - THINKING_LEVEL=${THINKING_LEVEL:-MEDIUM}
+      - ADK_MAX_LLM_CALLS=${ADK_MAX_LLM_CALLS:-500}
       - PYTHONPATH=/app
     volumes:
       # ADC クレデンシャルをマウント（ローカル開発用）
@@ -18,14 +23,19 @@ services:
       - "8080:8080"
     command: uv run adk web --host 0.0.0.0 --port 8080
 
-  # 個別パターン実行用（docker compose run runner p01_single_agent）
+  # 個別パターン実行用（docker compose run runner ...）
   runner:
     build: .
     environment:
+      - GOOGLE_GENAI_USE_ENTERPRISE=True
       - GOOGLE_GENAI_USE_VERTEXAI=True
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.5-flash}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-global}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.8-flash}
+      - FAST_MODEL=${FAST_MODEL:-gemini-3.5-flash-lite}
+      - ESCALATION_MODEL=${ESCALATION_MODEL:-gemini-4-argon}
+      - THINKING_LEVEL=${THINKING_LEVEL:-MEDIUM}
+      - ADK_MAX_LLM_CALLS=${ADK_MAX_LLM_CALLS:-500}
       - PYTHONPATH=/app
     volumes:
       - ${HOME}/.config/gcloud:/root/.config/gcloud:ro

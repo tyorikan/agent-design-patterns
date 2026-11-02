@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from agent import run_with_react_trace
+from patterns.p02_react_pattern.agent import run_with_react_trace
 
 DEMO_QUERY = (
     "Cloud Run と GKE のどちらを選ぶべきか、コストと運用の観点から比較分析してください。"

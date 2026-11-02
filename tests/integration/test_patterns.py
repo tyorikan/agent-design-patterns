@@ -10,13 +10,15 @@ NOTE: これらは統合テストのため、Vertex AI ADC が必要。
 テスト実行時間: 各テスト 30秒〜2分（全体で約20分）
 """
 
+import json
 import os
 
 import pytest
 
 from conftest import (
+    load_cli_pattern_agent,
     load_pattern_agent,
-    run_agent_all_text,
+    load_production_pattern_agent,
     run_agent_final_response,
     run_agent_trajectory,
 )
@@ -252,6 +254,86 @@ class TestSwarm:
 
 
 # ============================================================
+# Lv.11 Human-in-the-Loop Pattern（RequestInput 一時停止・再開検証）
+# ============================================================
+class TestHumanInTheLoop:
+    @pytest.mark.asyncio
+    async def test_approval_workflow_runs_and_resumes_if_interrupted(self):
+        """コンプライアンス審査を実行し、人間承認要求が出た場合は APPROVE 応答で再開完了する。"""
+        from google.adk.runners import Runner
+        from google.adk.sessions import InMemorySessionService
+        from google.genai import types
+
+        mod = load_pattern_agent("p11_human_in_the_loop")
+        session_service = InMemorySessionService()
+        await session_service.create_session(
+            app_name=mod.app.name,
+            user_id="test_user",
+            session_id="hitl_session",
+        )
+        runner = Runner(app=mod.app, session_service=session_service)
+
+        pending_interrupt = None
+        authors: list[str] = []
+        final_text = ""
+
+        try:
+            async for event in runner.run_async(
+                user_id="test_user",
+                session_id="hitl_session",
+                new_message=types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(
+                            text=(
+                                "Gemini Enterprise Agent Platform を活用した業務効率化サービスの"
+                                "紹介コピーを作成してください（「工数大幅削減」という表現を含む）"
+                            )
+                        )
+                    ],
+                ),
+            ):
+                if event.author and event.author not in authors:
+                    authors.append(event.author)
+                for fc in event.get_function_calls():
+                    if fc.name == "adk_request_input":
+                        pending_interrupt = fc
+                if event.content and event.content.parts:
+                    final_text += "".join(p.text for p in event.content.parts if p.text)
+
+            assert "content_creator" in authors
+            assert "compliance_checker" in authors
+
+            if pending_interrupt is not None:
+                resume_msg = types.Content(
+                    role="user",
+                    parts=[
+                        types.Part(
+                            function_response=types.FunctionResponse(
+                                id=pending_interrupt.id,
+                                name=pending_interrupt.name,
+                                response={"result": "APPROVE: 注意書き付きで公開承認"},
+                            )
+                        )
+                    ],
+                )
+                async for event in runner.run_async(
+                    user_id="test_user",
+                    session_id="hitl_session",
+                    new_message=resume_msg,
+                ):
+                    if event.author and event.author not in authors:
+                        authors.append(event.author)
+                    if event.content and event.content.parts:
+                        final_text += "".join(p.text for p in event.content.parts if p.text)
+        finally:
+            await runner.close()
+
+        assert "final_publisher" in authors
+        assert len(final_text) > 100
+
+
+# ============================================================
 # Capstone（トラジェクトリ検証）
 # ============================================================
 class TestCapstone:
@@ -275,12 +357,14 @@ class TestCapstone:
 # ============================================================
 # Agentic Pipeline（Antigravity Agent 統合テスト）
 # ============================================================
-_has_gemini_api_key = bool(os.environ.get("GEMINI_API_KEY"))
+_has_antigravity_auth = bool(
+    os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+)
 
 
 @pytest.mark.skipif(
-    not _has_gemini_api_key,
-    reason="GEMINI_API_KEY が未設定（Antigravity local harness に必須）",
+    not _has_antigravity_auth,
+    reason="GEMINI_API_KEY または GOOGLE_CLOUD_PROJECT が未設定",
 )
 class TestAgenticPipeline:
     """汎用 PGE コード実装パイプラインの統合テスト。
@@ -298,7 +382,7 @@ class TestAgenticPipeline:
 
     @pytest.fixture(autouse=True)
     def clean_output_dir(self):
-        """テスト前に output ディレクトリをクリーンアップする。"""
+        """テスト前後に output ディレクトリをクリーンアップする。"""
         import shutil
 
         from patterns.agentic_pipeline.tools import OUTPUT_DIR
@@ -307,7 +391,8 @@ class TestAgenticPipeline:
             shutil.rmtree(OUTPUT_DIR)
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         yield
-        # テスト後はクリーンアップしない（デバッグ用に残す）
+        if OUTPUT_DIR.exists():
+            shutil.rmtree(OUTPUT_DIR)
 
     @pytest.mark.asyncio
     async def test_pge_loop_with_abstract_business_request(self):
@@ -393,3 +478,137 @@ class TestAgenticPipeline:
             assert len(content) > 10, (
                 f"生成ファイル {f.name} の内容が空です"
             )
+
+
+# ============================================================
+# Track 2: Agents CLI Lifecycle Patterns（CLI-01 〜 CLI-04）
+# ============================================================
+class TestAgentsCliPatternsIntegration:
+    """`agents_cli_patterns` の各 ADK `App` が実モデルでツールを呼び出して応答することを検証する。"""
+
+    @pytest.mark.asyncio
+    async def test_cli01_spec_driven_sre_agent(self):
+        mod = load_cli_pattern_agent("cli01_spec_driven_agent")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "30日間で目標可用性 99.9%、実測エラー率 0.05% のエラーバジェット残量を計算してください。",
+        )
+        assert len(response) > 20
+
+    @pytest.mark.asyncio
+    async def test_cli02_evaluation_gate_finops_agent(self):
+        mod = load_cli_pattern_agent("cli02_evaluation_gate")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "payments-prod の費用スパイクを分析してください。",
+        )
+        assert len(response) > 20
+
+    @pytest.mark.asyncio
+    async def test_cli03_a2a_security_advisor(self):
+        mod = load_cli_pattern_agent("cli03_a2a_interoperability")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "roles/owner の最小権限リスクを診断してください。",
+        )
+        assert len(response) > 20
+
+    @pytest.mark.asyncio
+    async def test_cli04_grounded_rag_agent(self):
+        mod = load_cli_pattern_agent("cli04_grounded_rag_deploy")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "ディザスタリカバリの目標 RTO / RPO ポリシーを検索して引用付きで教えてください。",
+        )
+        assert len(response) > 20
+
+
+# ============================================================
+# Track 3: Production Design Patterns（PROD-01 〜 PROD-06）
+# ============================================================
+class TestProductionPatternsIntegration:
+    """`production_patterns` の各パターンが実モデル上で契約・ガードレール・予算制御と共に完走することを検証する。"""
+
+    @pytest.mark.asyncio
+    async def test_prod01_contract_based_execution(self):
+        mod = load_production_pattern_agent("prod01_contract_based_execution")
+        ticket = json.dumps(
+            {
+                "ticket_id": "CHG-2001",
+                "service_name": "checkout-api",
+                "requested_replicas": 60,
+                "environment": "prod",
+            }
+        )
+        response, trajectory = await run_agent_trajectory(
+            mod.root_agent, "prod01_contract_based_execution", ticket
+        )
+        assert "VERIFIED_READY" in response or "HALTED_FOR_HUMAN" in response
+        assert "precondition_gate" in trajectory
+
+    @pytest.mark.asyncio
+    async def test_prod02_idempotent_low_value_credit(self):
+        mod = load_production_pattern_agent("prod02_idempotent_approval_gate")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "注文 ORD-3001 に対して配送遅延のお詫びとして 20 USD のクレジットを発行してください。",
+            initial_state={"auth:tenant_id": "tenant-alpha"},
+        )
+        assert len(response) > 10
+
+    @pytest.mark.asyncio
+    async def test_prod03_guardrails_context_isolation(self):
+        mod = load_production_pattern_agent("prod03_guardrails_context_isolation")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "未払い（open）の請求書一覧を確認してください。",
+            initial_state={"auth:tenant_id": "tenant-alpha"},
+        )
+        assert len(response) > 10
+        assert "alice.billing@alpha.example.com" not in response
+
+    @pytest.mark.asyncio
+    async def test_prod04_model_cascade(self):
+        mod = load_production_pattern_agent("prod04_model_cascade")
+        response, trajectory = await run_agent_trajectory(
+            mod.root_agent,
+            "prod04_model_cascade",
+            "HTTP 429 エラーに対する指数バックオフとジッターの実装手順を簡潔に教えてください。",
+        )
+        assert len(response) > 40
+        assert "fast_drafter_agent" in trajectory
+
+    @pytest.mark.asyncio
+    async def test_prod05_outcome_state_evaluation_agent(self):
+        mod = load_production_pattern_agent("prod05_outcome_state_evaluation")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "注文 ORD-100 の配送先を郵便番号 150-0002、市区町村 Shibuya に変更してください。",
+            initial_state={
+                "orders_db": {
+                    "ORD-100": {
+                        "shipment_status": "unshipped",
+                        "postal_code": "100-0001",
+                        "city": "Chiyoda",
+                    }
+                }
+            },
+        )
+        assert len(response) > 10
+
+    @pytest.mark.asyncio
+    async def test_prod06_context_compaction_budget(self):
+        mod = load_production_pattern_agent("prod06_context_compaction_budget")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "checkout-api のログを取得し、発生しているエラー原因を特定してください。",
+        )
+        assert len(response) > 20

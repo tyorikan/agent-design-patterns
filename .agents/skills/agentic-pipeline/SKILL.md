@@ -165,13 +165,10 @@ class Severity(str, Enum):
 
 ## 認証
 
-GEMINI_API_KEY を使用（Antigravity local harness に必須）:
+`google-antigravity>=0.1.23` では以下の 2 方式をサポートする:
 
-`.env` に以下を設定:
-
-```
-GEMINI_API_KEY=your-api-key
-```
+1. **Vertex AI ADC（推奨）**: `GOOGLE_GENAI_USE_VERTEXAI=True`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION=global`
+2. **Gemini Developer API Key**: `.env` に `GEMINI_API_KEY=your-api-key` を設定した場合に優先使用
 
 ## ユースケースカタログ
 

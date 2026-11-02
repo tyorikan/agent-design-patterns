@@ -5,6 +5,8 @@
     最もシンプルなパターン。ここから始めよう。
 """
 
+from datetime import UTC
+
 from google.adk.agents import LlmAgent
 from google.adk.tools import google_search
 
@@ -19,9 +21,9 @@ def get_current_date() -> dict[str, str]:
     Returns:
         現在の日付情報を含む辞書
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return {
         "date": now.strftime("%Y-%m-%d"),
         "year": str(now.year),

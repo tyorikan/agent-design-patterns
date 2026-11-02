@@ -1,54 +1,27 @@
 """Capstone: Enterprise Research Agent - 全デザインパターン統合（Workflow 版）。
 
-ADK v2 Workflow API を使用。
-旧 SequentialAgent / ParallelAgent / LoopAgent を Workflow に移行。
-
-このエージェントは、学んだ全パターンを組み合わせて
+ADK v2 Workflow API を使用し、以下のデザインパターンを単一パイプラインに統合して
 「企業の技術戦略評価レポート」を自動生成する。
 
-## 使用するパターン
+## 統合しているデザインパターン
 
-1. Coordinator (Lv.8):  ユーザーリクエストを専門チームに振り分ける
-2. Parallel:            複数ソースから同時並行でデータ収集（ネストタプル）
-3. Sequential:          データ収集 → 分析 → レポート生成の順次処理（チェーンタプル）
-4. Loop:                品質が基準に達するまでレポートを改善（条件付きサイクル）
-5. Review & Critique:   最終レポートを厳格に評価
-
-## データ受け渡し方法
-
-並列ノード（ネストタプル）の output_key で state_delta に書き込まれたデータは、
-セッション状態（session.state）へのマージタイミングが保証されない。
-そのため、fan-in 先のノード（analysis_agent, report_writer, report_critic）では
-instruction を **callable (async function)** にし、ReadonlyContext.state.get() で
-安全にデータを取得する。これにより KeyError を回避できる。
-
-## アーキテクチャ図
-
-```
-User Request
-    │
-    ▼
-[Workflow: root_agent]
-    │
-    ├── [Coordinator]                        ← ユーザーの意図を解釈
-    │
-    ├── [Parallel: (web, tech, financial)]  → 各 *_data
-    │
-    ├── [analysis_agent]                    → analysis_result  (callable instruction)
-    │
-    ├── [report_writer]                     → report_draft     (callable instruction)
-    │
-    └── [report_critic]                     → critic_feedback  (callable instruction)
-          ↺ NEEDS_IMPROVEMENT → report_writer（条件付きサイクル）
-```
+1. Coordinator:       ユーザー要求から分析対象企業と調査スコープを構造化
+2. Parallel + Join:   3 専門リサーチャーの並列収集と `JoinNode` によるバリア同期（重複実行防止）
+3. Sequential:        データ収集 → 統合戦略分析 → レポート執筆の直列パイプライン
+4. Review & Critique: 執筆者（`report_writer`）と品質審査官（`report_critic`）の分離
+5. Loop (@node 制御): `report_review_router` がスコア判定と最大反復回数（`MAX_REVIEW_ITERATIONS`）を制御
 """
 
 import sys
 from pathlib import Path
+from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.context import Context
 from google.adk.agents.readonly_context import ReadonlyContext
-from google.adk.workflow import Workflow
+from google.adk.events.event import Event
+from google.adk.workflow import JoinNode, Workflow, node
+from google.genai import types
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -56,10 +29,39 @@ from shared.config import get_settings
 
 settings = get_settings()
 
-# =====================================================
-# Layer: データ収集（Parallel）
-# =====================================================
+MAX_REVIEW_ITERATIONS = 3
 
+
+def _extract_text(value: Any) -> str:
+    """ノード入力からプレーンテキストを抽出する。"""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, types.Content) and value.parts:
+        return "".join(
+            p.text for p in value.parts if p.text and not getattr(p, "thought", False)
+        )
+    return str(value or "")
+
+
+# =====================================================
+# Layer 1: Coordinator（調査スコープ明確化）
+# =====================================================
+coordinator = LlmAgent(
+    name="enterprise_research_coordinator",
+    model=settings.default_model,
+    description="エンタープライズリサーチのコーディネーター。",
+    instruction="""\
+あなたは企業分析プロジェクトのディレクターです。
+
+ユーザーからの分析依頼を受け取り、分析対象企業を特定してください。
+ユーザーのリクエストを明確化し、企業名と分析の観点を整理して出力してください。
+""",
+    output_key="coordinator_output",
+)
+
+# =====================================================
+# Layer 2: データ収集（Parallel Fan-out + JoinNode Fan-in）
+# =====================================================
 web_researcher = LlmAgent(
     name="enterprise_web_researcher",
     model=settings.default_model,
@@ -159,20 +161,15 @@ financial_researcher = LlmAgent(
     output_key="financial_data",
 )
 
-# =====================================================
-# Layer: 統合分析（Sequential の中間ステップ）
-#   ※ 並列ノード（ネストタプル）の直後に実行される fan-in ノードのため、
-#     instruction を callable にして ReadonlyContext.state.get() で
-#     安全にデータを取得する（state_delta のマージタイミング問題を回避）。
-# =====================================================
+# 3 リサーチャー全ての完了を待機するバリア同期ノード（後続ノードの 3 重実行を防止）
+join_research = JoinNode(name="join_enterprise_research")
 
 
+# =====================================================
+# Layer 3: 統合分析（Sequential 中間ステップ）
+# =====================================================
 async def _build_analysis_instruction(ctx: ReadonlyContext) -> str:
-    """analysis_agent 用の instruction を動的に構築する。
-
-    並列ノードの state_delta がセッションに反映された後に
-    ReadonlyContext.state から安全にデータを取得する。
-    """
+    """並列収集された 3 領域のデータを安全に取得して戦略分析プロンプトを構築する。"""
     web_data = ctx.state.get("web_data", "（データなし）")
     tech_data = ctx.state.get("tech_data", "（データなし）")
     financial_data = ctx.state.get("financial_data", "（データなし）")
@@ -193,7 +190,7 @@ async def _build_analysis_instruction(ctx: ReadonlyContext) -> str:
 
 ---
 
-## 分析を行ってください
+## 分析項目
 
 ### 1. SWOT 分析
 - **強み (Strengths)**: 内部の競争優位性（技術、ブランド、財務など）
@@ -214,7 +211,7 @@ async def _build_analysis_instruction(ctx: ReadonlyContext) -> str:
 ### 4. 投資家目線での評価
 - 成長性スコア (1-10)
 - 収益性スコア (1-10)
-- リスクスコア (1-10 、低いほど良い)
+- リスクスコア (1-10、低いほど良い)
 
 分析結果を構造化されたテキストで出力してください。
 """
@@ -224,28 +221,33 @@ analysis_agent = LlmAgent(
     name="enterprise_analyst",
     model=settings.default_model,
     description="収集したデータを統合して戦略的分析を行う",
-    instruction=_build_analysis_instruction,  # callable: 並列ノードの state_delta 反映後に評価
+    instruction=_build_analysis_instruction,
     output_key="analysis_result",
 )
 
-# =====================================================
-# Layer: レポート生成 + レビュー（条件付きサイクル）
-#   ※ report_writer: 並列ノード由来の変数 (web_data 等) を参照するため callable。
-#   ※ report_critic: 条件付きサイクルで再実行されるため callable で安全に取得。
-# =====================================================
 
-
+# =====================================================
+# Layer 4: レポート執筆 + 品質批評ループ（Review & Critique + @node Loop）
+# =====================================================
 async def _build_report_writer_instruction(ctx: ReadonlyContext) -> str:
-    """report_writer 用の instruction を動的に構築する。
-
-    analysis_result は Sequential の前ステップから取得（順序保証あり）。
-    web_data / tech_data / financial_data は並列ノード由来のため、
-    state.get() で安全にフォールバック付きで取得する。
-    """
+    """初回は新規レポート作成、再試行時は `critic_feedback` を反映した改訂を行う。"""
     analysis_result = ctx.state.get("analysis_result", "（データなし）")
     web_data = ctx.state.get("web_data", "（データなし）")
     tech_data = ctx.state.get("tech_data", "（データなし）")
     financial_data = ctx.state.get("financial_data", "（データなし）")
+    prev_draft = ctx.state.get("report_draft", "")
+    feedback = ctx.state.get("critic_feedback", "")
+
+    revision_section = ""
+    if feedback:
+        revision_section = f"""
+## 前回のレポートドラフト
+{prev_draft}
+
+## 品質審査官からの改善指示（すべて反映して改稿してください）
+{feedback}
+"""
+
     return f"""\
 あなたはビジネスライターです。
 
@@ -256,7 +258,7 @@ async def _build_report_writer_instruction(ctx: ReadonlyContext) -> str:
 企業情報: {web_data}
 技術情報: {tech_data}
 財務情報: {financial_data}
-
+{revision_section}
 ---
 
 以下の形式でエグゼクティブレポートを作成してください:
@@ -294,11 +296,7 @@ async def _build_report_writer_instruction(ctx: ReadonlyContext) -> str:
 
 
 async def _build_report_critic_instruction(ctx: ReadonlyContext) -> str:
-    """report_critic 用の instruction を動的に構築する。
-
-    report_draft は Sequential の前ステップ (report_writer) から取得。
-    条件付きサイクルで再実行される場合にも安全にデータを取得する。
-    """
+    """`report_draft` を安全に取得して厳格な品質評価を行う。"""
     report_draft = ctx.state.get("report_draft", "（レポートなし）")
     return f"""\
 あなたは品質管理の専門家です。
@@ -326,8 +324,8 @@ async def _build_report_critic_instruction(ctx: ReadonlyContext) -> str:
 （3点以内、具体的に）
 
 ### 最終判定
-スコア 85 以上: [REPORT_APPROVED] - 配布可能
-スコア 85 未満: NEEDS_IMPROVEMENT - 改善して再提出
+- スコア 85 以上なら必ず `[REPORT_APPROVED]` - 配布可能 と記載してください
+- スコア 85 未満なら必ず `[NEEDS_IMPROVEMENT]` - 改善して再提出 と記載してください
 """
 
 
@@ -335,7 +333,7 @@ report_writer = LlmAgent(
     name="enterprise_report_writer",
     model=settings.default_model,
     description="分析データからエグゼクティブレポートを生成・改善する",
-    instruction=_build_report_writer_instruction,  # callable: 並列ノード由来の変数を安全に取得
+    instruction=_build_report_writer_instruction,
     output_key="report_draft",
 )
 
@@ -343,46 +341,68 @@ report_critic = LlmAgent(
     name="enterprise_report_critic",
     model=settings.default_model,
     description="レポートの品質を厳格に評価してフィードバックを提供する",
-    instruction=_build_report_critic_instruction,  # callable: サイクル再実行時にも安全に取得
+    instruction=_build_report_critic_instruction,
     output_key="critic_feedback",
 )
 
+
+@node(name="report_review_router")
+def report_review_router(ctx: Context, node_input: Any) -> Event:
+    """批評結果と反復回数上限（`MAX_REVIEW_ITERATIONS`）を検査して分岐する。"""
+    iteration = int(ctx.state.get("capstone_review_iteration", 0)) + 1
+    feedback = _extract_text(node_input) or str(ctx.state.get("critic_feedback", ""))
+    upper = feedback.upper()
+
+    is_approved = "[REPORT_APPROVED]" in upper
+    needs_improvement = (
+        "NEEDS_IMPROVEMENT" in upper or "REVISE" in upper
+    ) and not is_approved
+
+    if needs_improvement and iteration < MAX_REVIEW_ITERATIONS:
+        return Event(
+            output=feedback,
+            route="NEEDS_IMPROVEMENT",
+            state={
+                "capstone_review_iteration": iteration,
+                "critic_feedback": feedback,
+            },
+        )
+    return Event(
+        output=str(ctx.state.get("report_draft", feedback)),
+        route="APPROVED",
+        state={
+            "capstone_review_iteration": iteration,
+            "critic_feedback": feedback,
+        },
+    )
+
+
+@node(name="finalize_enterprise_report")
+def finalize_enterprise_report(ctx: Context, node_input: Any) -> str:
+    """承認済み（または上限到達時）のエグゼクティブレポートを返す。"""
+    return str(ctx.state.get("report_draft") or _extract_text(node_input))
+
+
 # =====================================================
-# メインパイプライン + Coordinator 統合（Workflow）
-#   ※ Workflow は BaseAgent ではないため sub_agents に入れられない。
-#   ※ 代わりに coordinator を Workflow edges の最初のノードとして組み込む。
-#
-#   1. Coordinator（ユーザーリクエスト解釈）
-#   2. 並列データ収集（ネストタプル）
-#   3. 統合分析
-#   4. レポート生成 → 評価（条件付きサイクル）
+# メインパイプライン（Workflow 全構文統合）
 # =====================================================
-
-coordinator = LlmAgent(
-    name="enterprise_research_coordinator",
-    model=settings.default_model,
-    description="エンタープライズリサーチのコーディネーター。",
-    instruction="""\
-あなたは企業分析プロジェクトのディレクターです。
-
-ユーザーからの分析依頼を受け取り、分析対象企業を特定してください。
-ユーザーのリクエストを明確化し、企業名と分析の観点を整理して出力してください。
-""",
-    output_key="coordinator_output",
-)
-
 root_agent = Workflow(
     name="enterprise_research_workflow",
-    description="全デザインパターン統合: Coordinator + Parallel + Sequential + Loop + Review",
+    description="全デザインパターン統合: Coordinator + Parallel(JoinNode) + Sequential + Loop + Review",
     edges=[
         (
             "START",
             coordinator,
             (web_researcher, tech_researcher, financial_researcher),
+            join_research,
             analysis_agent,
             report_writer,
             report_critic,
-            {"NEEDS_IMPROVEMENT": report_writer},
+            report_review_router,
+            {
+                "NEEDS_IMPROVEMENT": report_writer,
+                "APPROVED": finalize_enterprise_report,
+            },
         ),
     ],
 )
