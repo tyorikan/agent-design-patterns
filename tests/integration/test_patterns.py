@@ -387,8 +387,10 @@ class TestAgenticPipeline:
             f"OUTPUT_DIR: {OUTPUT_DIR}"
         )
 
-        # 生成されたコードが空でない
+        # 生成されたコードが空でない（__init__.py は空で正常なため除外）
         for f in all_files:
+            if f.name == "__init__.py":
+                continue
             content = f.read_text()
             assert len(content) > 10, (
                 f"生成ファイル {f.name} の内容が空です"

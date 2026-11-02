@@ -25,6 +25,9 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.12.0",
 ]
+claude = [
+    "anthropic[vertex]>=0.43.0",
+]
 
 # shared/ だけをパッケージとして認識（patterns/ は除外）
 # これがないと setuptools が shared/ と patterns/ を両方検出してエラーになる
