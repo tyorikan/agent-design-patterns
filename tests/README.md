@@ -30,8 +30,8 @@ assert "スコア" in response  # LLM の揺らぎ次第で PASS/FAIL が変わ�
 
 | レベル | ディレクトリ | 外部 LLM 呼出 | 実行時間 | テスト数 |
 |--------|-------------|--------------|---------|---------|
-| **Lv.1** | `tests/unit/` | ❌ なし（`ScriptedLlm` インプロセス実行を含む） | **約 4 秒** | 98 |
-| **Lv.2** | `tests/integration/` | ✅ あり（Gemini Enterprise Agent Platform / Vertex AI） | **約 25 分** | 29 |
+| **Lv.1** | `tests/unit/` | ❌ なし（`ScriptedLlm` インプロセス実行を含む） | **約 6 秒** | 120 |
+| **Lv.2** | `tests/integration/` | ✅ あり（Gemini Enterprise Agent Platform / Vertex AI） | **約 25 分** | 25 |
 
 ---
 
@@ -50,7 +50,8 @@ assert "スコア" in response  # LLM の揺らぎ次第で PASS/FAIL が変わ�
 | ファイル | 対象トラック | 検証内容 |
 |---|---|---|
 | `test_config.py` | `shared/` | `.env.example` 整合性、`gemini-3.8-flash` + `global` 既定値、`GOOGLE_GENAI_USE_ENTERPRISE` 同期、思考レベル互換チェック |
-| `test_agent_structure.py` | `patterns/` | 全 13 パターン（Lv.1〜11 + Capstone + Agentic Pipeline）の ADK 2.x `Workflow` グラフ構造・サイクル・サブエージェント構成 |
+| `test_agent_structure.py` | `patterns/` | 全 13 パターン（Lv.1〜11 + Capstone + Agentic Pipeline）の ADK 2.x `Workflow` グラフ構造・`JoinNode`・`@node` ルーター・`ResumabilityConfig` 構成 |
+| `test_existing_patterns_runtime.py` | `patterns/` / `shared/` | 既存 13 パターンすべての `GeminiScriptedLlm` インプロセス実行検証（ループ継続・上限終了、`JoinNode` 単発集約、HITL `RequestInput` 一時停止・承認/却下再開、全 `demo.py` インポート検証） |
 | `test_agents_cli_patterns.py` | `agents_cli_patterns/` | CLI-01〜CLI-04 の `agent.yaml` / `eval_config.json` 整合性、ツール単体検証、A2A Agent Card 配信、CI 評価ゲート終了コード |
 | `test_production_patterns.py` | `production_patterns/` | PROD-01〜PROD-06 の `ScriptedLlm` インプロセス実行（事前拒否、リトライ、冪等性台帳、HITL 一時停止/再開、検疫、Rogan–Gladen 補正、`pass^k`、`ArtifactService` 退避、同期予算遮断） |
 

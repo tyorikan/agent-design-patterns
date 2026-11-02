@@ -1,136 +1,108 @@
-# Lv.10 Swarm Pattern
+# Lv.10 Swarm Pattern（多専門家合議・コンセンサスパターン）
 
 ## 概念
 
-**Swarm** は、複数の専門エージェントが**対等な立場**で相互に議論し、
-コンセンサスに達するまで反復するパターン。
-Hierarchical（Lv.9）のような上下関係ではなく、**ボトムアップの合意形成**で意思決定する。
+**Swarm Pattern（合議コンセンサスパターン）** は、異なる専門視点（市場・技術・財務など）を持つ複数のエージェントが互いの提案と懸念事項を参照しながら議論ラウンドを重ね、ファシリテーターが合意成立（`[CONSENSUS_REACHED]`）と判定するか最大ラウンド数（`MAX_ROUNDS`）に達するまで設計案を洗練させるデザインパターンです。
 
-```
-┌──────────┐   ┌──────────┐   ┌──────────┐
-│  Market   │←→│ Engineer │←→│ Finance  │
-│  Expert   │   │  Expert  │   │  Expert  │
-└─────┬─────┘   └─────┬─────┘   └─────┬─────┘
-      │               │               │
-      └───────────┬───┘───────────────┘
-                  ▼
-         [Consensus Builder]
-          合意度チェック
-                  │
-     ┌────────────┴────────────┐
-     │                         │
-  合意未達                 合意達成
-  → 次ラウンドへ           → [SWARM_CONSENSUS]
-  (output_key で             完了
-   フィードバック)
+`Lv.9 Hierarchical` が上位者からのトップダウン分解であるのに対し、本パターンは **相反するトレードオフ（例: 市場が求める豊富な機能 vs 開発工数と予算制約）を対等な議論ですり合わせるボトムアップ合意形成** を目的とします。
+
+```mermaid
+flowchart LR
+    S(("START")) --> M["1. market_expert<br/>output_key='market_proposal'"]
+    M --> E["2. engineer_expert<br/>output_key='engineer_proposal'"]
+    E --> F["3. finance_expert<br/>output_key='finance_proposal'"]
+    F --> B["4. consensus_builder<br/>output_key='consensus_document'"]
+    B --> R{"consensus_router (@node)<br/>[CONSENSUS_REACHED] または<br/>round >= MAX_ROUNDS(3) ?"}
+    R -->|"route='REVISE'<br/>(未解決課題を次ラウンドへ)"| M
+    R -->|"route='CONSENSUS'"| FIN["finalize_consensus (@node)<br/>最終合意書を出力"]
 ```
 
 ## いつ使うか
 
-✅ **適している場合:**
-- 多角的な視点（市場・技術・財務など）を統合した意思決定が必要
-- 正解が 1 つではなく、トレードオフの合意が求められるタスク
-- 各専門家が対等な立場で議論すべきケース
-- 製品設計、戦略立案、投資判断
+### ✅ 適している場合
+- 新規プロダクト企画、アーキテクチャ選定、投資優先度決定など、単一の正解がなく複数の専門領域（ビジネス・エンジニアリング・財務/リスク）の折り合いをつける必要がある意思決定支援
+- 1 回の多面分析だけでは各専門家の意見が食い違ったまま終わるため、未解決論点を次ラウンドへ持ち越してスコープ調整（MVP 切り出し等）を行わせたい場合
 
-❌ **限界:**
-- LLM 呼び出し回数が最多（専門家数 × ラウンド数）
-- 合意に達しない場合 `max_iterations` で強制終了
-- 議論の質が LLM の推論能力に大きく依存
-- シンプルな分業で済むタスクにはオーバーキル（→ Lv.9 Hierarchical を検討）
+### ❌ 不向きな場合・できないこと
+- **トークン消費量とレイテンシが全パターン中で最も大きい**: 1 ラウンドあたり 4 エージェントが直列に発言し、最大 `MAX_ROUNDS`（3 ラウンド = 計 12 回の LLM 呼び出し）まで反復するため、リアルタイム応答や単純な調査タスクには不向きです。
+- **法的責任や最終決済の承認を AI 合議だけで完結させることはできない**: AI エージェント同士が合意しても実世界のコンプライアンス責任や予算執行権限は担保されないため、高リスクな実行判断には [`Lv.11 Human-in-the-Loop`](../p11_human_in_the_loop/) を後段に組み合わせます。
 
-## Hierarchical (Lv.9) との違い
+## 関連パターンとの違い
 
-| 観点 | Hierarchical (Lv.9) | Swarm (Lv.10) |
-|---|---|---|
-| 権限構造 | 中央集権（上位が指示） | 分散型（全員対等） |
-| 合意形成 | トップダウン | ボトムアップ（議論） |
-| データフロー | 一方向（上→下→統合） | 循環（ラウンドごとに更新） |
-| 不確実性 | 🟢 低（計画的） | 🟡 高（創発的） |
-| コスト | 🔴 高 | 🔴 最高（反復 × 専門家数） |
+| 観点 | Parallel (Lv.4) | Hierarchical (Lv.9) | Swarm (Lv.10) |
+|---|---|---|---|
+| エージェント間の関係 | 独立（他者の出力を見ない） | 上下階層（マネージャーが委譲） | **対等な専門家が前者の提案に反論・補完** |
+| 実行サイクル | 1 回のみ（並列 → 統合） | タスク完了まで動的委譲 | **合意成立まで複数ラウンド循環** |
+| 主な価値 | 調査時間の短縮 | 大規模タスクの分割統治 | トレードオフの解消と合意案の創出 |
 
 ## このデモのユースケース
 
-**製品設計コンセンサス**
+**新規クラウド製品設計の 3 専門家コンセンサス形成**
 
-製品アイデアを入力すると、3 人の専門家（マーケター・エンジニア・CFO）が
-議論ラウンドを繰り返し、市場・技術・財務の観点で合意した製品設計提案書を作成する。
+製品アイデアを入力すると、以下の 4 エージェントがラウンド制で議論を進めます。
 
-## アーキテクチャ
+1. `market_expert` (`output_key="market_proposal"`): ターゲット顧客・TAM/SAM/SOM・差別化を提案。2 ラウンド目以降は前ラウンドの `consensus_document` に記載された未解決課題を解消するようスコープを調整。
+2. `engineer_expert` (`output_key="engineer_proposal"`): `{market_proposal}` の技術的実現可能性・構成・開発工数・リスクを評価し修正案を提示。
+3. `finance_expert` (`output_key="finance_proposal"`): `{market_proposal}` と `{engineer_proposal}` をもとに初期投資・ROI・MVP フェーズ分けを評価。
+4. `consensus_builder` (`output_key="consensus_document"`): 3 者の意見を統合し、合意が十分なら `[CONSENSUS_REACHED]`、重大な対立や未解決論点が残っていれば `[NEEDS_ANOTHER_ROUND]` を出力。
 
-```
-User: "クラウドネイティブな在庫管理 SaaS を設計してください"
-  │
-  ▼
-┌───────────────────────────────────────────────────────────┐
-│  Workflow: product_design_swarm (条件付きサイクル)         │
-│                                                           │
-│  edges=[('START', market_expert, engineer_expert,         │
-│          finance_expert, consensus_builder,               │
-│          {'NEXT_ROUND': market_expert})]                  │
-│                                                           │
-│  Round N:                                                 │
-│  ┌──────────────────────────────────────┐                 │
-│  │ ① market_expert                     │                 │
-│  │   → 顧客・市場分析、Go-to-Market    │                 │
-│  │   output_key: market_proposal        │                 │
-│  ├──────────────────────────────────────┤                 │
-│  │ ② engineer_expert                   │                 │
-│  │   → 技術的実現可能性・アーキテクチャ│                 │
-│  │   ※ {market_proposal} を参照        │                 │
-│  │   output_key: engineer_proposal      │                 │
-│  ├──────────────────────────────────────┤                 │
-│  │ ③ finance_expert                    │                 │
-│  │   → ROI・コスト・フェーズ計画       │                 │
-│  │   ※ {market_proposal} +             │                 │
-│  │     {engineer_proposal} を参照       │                 │
-│  │   output_key: finance_proposal       │                 │
-│  ├──────────────────────────────────────┤                 │
-│  │ ④ consensus_builder                 │                 │
-│  │   → 議論を統合・製品設計提案書      │                 │
-│  │   output_key: market_proposal ← 上書 │                 │
-│  │   合意度 >= 70% → END               │                 │
-│  │   合意度 <  70% → 'NEXT_ROUND'      │                 │
-│  │   次ラウンドのフィードバックになる   │                 │
-│  └──────────────────────────────────────┘                 │
-└───────────────────────────────────────────────────────────┘
+## アーキテクチャと実装のポイント
+
+```python
+from google.adk.workflow import Workflow
+
+MAX_ROUNDS = 3
+
+root_agent = Workflow(
+    name="product_design_swarm",
+    edges=[
+        (
+            "START",
+            market_expert,
+            engineer_expert,
+            finance_expert,
+            consensus_builder,
+            consensus_router,
+            {"REVISE": market_expert, "CONSENSUS": finalize_consensus},
+        ),
+    ],
+)
 ```
 
-### 循環フィードバックの仕組み
-
-```
-Round 1: market_expert → engineer_expert → finance_expert → consensus_builder
-             │                                                    │
-             └──── consensus_builder が market_proposal を上書き ──┘
-                   → Round 2 の market_expert は前ラウンドの
-                     合意内容を踏まえて議論を深化
-```
+1. **状態キーを上書き潰しせず履歴を引き継ぐ設計**:
+   各専門家の提案キー（`market_proposal`, `engineer_proposal`, `finance_proposal`）とファシリテーターの統合キー（`consensus_document`）を分離しています。2 ラウンド目に入る際、`_build_market_expert_instruction(ctx)` が前ラウンドの `consensus_document` を読み取って改訂提案を行うため、各ラウンドの文脈が明確に保たれます。
+2. **決定論的ルーター `@node`（`consensus_router`）によるラウンド上限管理**:
+   `swarm_round` カウンタをセッション状態で管理し、`[NEEDS_ANOTHER_ROUND]` が出続けても `MAX_ROUNDS = 3` で確実に合意文書を確定させて終了します。
 
 ## トレードオフ
 
-| 観点 | 評価 |
-|---|---|
-| コスト | 🔴 最高（4 エージェント × 最大 3 ラウンド = 最大 12 回の LLM 呼び出し） |
-| レイテンシ | 🔴 高（複数ラウンドの逐次実行） |
-| 複雑性 | 🟡 中〜高（循環フィードバックの設計） |
-| 品質 | 🟢 高（多角的視点の統合と合意形成） |
-| 柔軟性 | 🟢 高（専門家の追加・交換が容易） |
-| 創発性 | 🟢 高（議論を通じた新しいアイデアの発見） |
+| 観点 | 評価 | 理由 |
+|---|---|---|
+| 多角的な意思決定品質 | 高 | 市場性・技術実現性・採算性の三すくみを段階的に解消できる |
+| 拡張性 | 高 | セキュリティ専門家や法務専門家をチェーンに追加しやすい |
+| 推論コスト | 高 | 4 エージェント $\times$ 最大 3 ラウンド（最大 12 回）のモデル呼び出しが発生 |
+| レイテンシ | 高 | 各専門家が前者の発言を読んで順番に議論するため応答時間は長い |
 
 ## 実行方法
 
 ```bash
-PYTHONPATH=../.. python3 demo.py
+# デモ実行（市場・技術・財務の 3 専門家による製品設計合議を実行）
+PYTHONPATH=. .venv/bin/python patterns/p10_swarm/demo.py
+
+# Lv.1 単体テスト（外部 API 通信なし: [NEEDS_ANOTHER_ROUND] → Round 2 合意到達の検証）
+.venv/bin/pytest tests/unit/test_agent_structure.py::TestSwarmStructure \
+  tests/unit/test_existing_patterns_runtime.py::TestP10SwarmRuntime -v
+
+# Lv.2 統合テスト（Google Cloud ADC 認証が必要）
+.venv/bin/pytest tests/integration/test_patterns.py::TestSwarm -v
 ```
 
 ## 学習ポイント
 
-1. **`output_key` の上書きによる循環フィードバック** — `consensus_builder` が `market_proposal` を上書きすることで、次ラウンドの議論に前ラウンドの合意内容を反映させる
-2. **`Workflow` 1 つで Sequential + Loop を統合** — v2 では `Workflow` のチェーンタプル＋条件付きサイクル（dict エッジ `{'NEXT_ROUND': market_expert}`）で、v1 の `SequentialAgent` + `LoopAgent` を 1 つの Workflow に統合
-3. **条件付きエッジによる合意判定** — `consensus_builder` がコンセンサスレベルを評価し、70% 以上なら END、未達なら `'NEXT_ROUND'` を返してサイクル再入
-4. **対等なエージェント間の議論設計** — 各専門家が前の専門家の `output_key` を `{変数名}` で参照し、「反論・補完・合意」の議論構造を形成
-5. **ADK の `{変数名}` の初回制約** — `market_expert` はループの最初に実行されるため `{変数名}` を使わず、ユーザーメッセージから直接読み取る設計
+1. 1 つの `Workflow` エッジ定義で「直列の専門家リレー」と「条件付き合議ラウンド」を統合する方法
+2. 前ラウンドの未解決課題（`consensus_document`）を次ラウンドの先頭エージェントへ安全にフィードバックする設計
+3. 議論の発散を防ぐための明確な合意判定タグと `MAX_ROUNDS` 上限ガードの実装
 
 ## 次のステップ
 
-→ **[Bonus: Human-in-the-Loop](../p11_human_in_the_loop/)**: 人間の判断を組み込む
+→ **[Lv.11 Human-in-the-Loop Pattern](../p11_human_in_the_loop/)**: ADK 2.x の `RequestInput` と `ResumabilityConfig` を使い、高リスク判定時にワークフローを一時停止して人間の承認・却下を受け取る

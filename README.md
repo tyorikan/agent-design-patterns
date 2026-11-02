@@ -35,7 +35,7 @@ pip install -e ".[dev]"
 ### 実行方法
 
 ```bash
-# 1. Lv.1 ユニットテスト（外部 API 通信なし・全 3 トラック 98 テストを約 4 秒で検証）
+# 1. Lv.1 ユニットテスト（外部 API 通信なし・全 3 トラック 120 テストを約 6 秒で検証）
 .venv/bin/pytest tests/unit/ -v
 
 # 2. 各パターンのデモ実行（GOOGLE_CLOUD_PROJECT 設定時）
@@ -73,25 +73,25 @@ flowchart LR
 | Lv.1 | **Single Agent** | [`patterns/p01_single_agent/`](patterns/p01_single_agent/) | GCP ドキュメント Q&A | `LlmAgent` |
 | Lv.2 | **ReAct Pattern** | [`patterns/p02_react_pattern/`](patterns/p02_react_pattern/) | 技術調査（思考・行動・観察の可視化） | `LlmAgent` + ツール群 |
 | Lv.3 | **Sequential** | [`patterns/p03_sequential/`](patterns/p03_sequential/) | ETL データパイプライン | `Workflow` チェーンタプル |
-| Lv.4 | **Parallel** | [`patterns/p04_parallel/`](patterns/p04_parallel/) | マルチソース AI ニュース集約 | `Workflow` ネストタプル |
+| Lv.4 | **Parallel** | [`patterns/p04_parallel/`](patterns/p04_parallel/) | マルチソース AI ニュース集約 | `Workflow` ネストタプル + `JoinNode` |
 
 #### 反復ワークフロー（Iterative Workflows）
 
 | Level | パターン | ディレクトリ | ユースケース | 主要な ADK 2.x 構成要素 |
 |-------|---------|------------|------------|-----------|
-| Lv.5 | **Loop** | [`patterns/p05_loop/`](patterns/p05_loop/) | コード生成 & テストループ | `Workflow` 条件付きサイクル |
-| Lv.6 | **Review & Critique** | [`patterns/p06_review_critique/`](patterns/p06_review_critique/) | ブログ記事の生成と批評改善 | `Workflow` 条件付きサイクル |
-| Lv.7 | **Iterative Refinement** | [`patterns/p07_iterative_refinement/`](patterns/p07_iterative_refinement/) | 技術ドキュメント自己改善 | `Workflow` 条件付きサイクル |
+| Lv.5 | **Loop** | [`patterns/p05_loop/`](patterns/p05_loop/) | コード生成 & テストループ | `Workflow` 条件付きサイクル + `@node` ルーター |
+| Lv.6 | **Review & Critique** | [`patterns/p06_review_critique/`](patterns/p06_review_critique/) | ブログ記事の生成と批評改善 | `Workflow` 条件付きサイクル + `@node` ルーター |
+| Lv.7 | **Iterative Refinement** | [`patterns/p07_iterative_refinement/`](patterns/p07_iterative_refinement/) | 技術ドキュメント自己改善 | `Workflow` 条件付きサイクル + スコア閾値ルーター |
 
 #### 動的オーケストレーション・複合パターン（Dynamic & Composite）
 
 | Level | パターン | ディレクトリ | ユースケース | 主要な ADK 2.x 構成要素 |
 |-------|---------|------------|------------|-----------|
 | Lv.8 | **Coordinator** | [`patterns/p08_coordinator/`](patterns/p08_coordinator/) | カスタマーサポート振り分け | `LlmAgent` (`sub_agents`) |
-| Lv.9 | **Hierarchical** | [`patterns/p09_hierarchical/`](patterns/p09_hierarchical/) | 競合分析（多層タスク分解） | 多層 `LlmAgent` |
-| Lv.10 | **Swarm** | [`patterns/p10_swarm/`](patterns/p10_swarm/) | 製品設計コンセンサス形成 | `Workflow` + 多エージェント合議 |
-| Lv.11 | **Human-in-the-Loop** | [`patterns/p11_human_in_the_loop/`](patterns/p11_human_in_the_loop/) | コンテンツコンプライアンス承認 | `Workflow` 条件分岐 |
-| 🏆 | **Capstone** | [`patterns/capstone/`](patterns/capstone/) | 全構文統合 企業分析レポート | `Workflow` 全構文統合 |
+| Lv.9 | **Hierarchical** | [`patterns/p09_hierarchical/`](patterns/p09_hierarchical/) | 競合分析（多層タスク分解） | 多層 `LlmAgent` + callable `instruction` |
+| Lv.10 | **Swarm** | [`patterns/p10_swarm/`](patterns/p10_swarm/) | 製品設計コンセンサス形成 | `Workflow` 多エージェント合議 + `@node` ルーター |
+| Lv.11 | **Human-in-the-Loop** | [`patterns/p11_human_in_the_loop/`](patterns/p11_human_in_the_loop/) | コンテンツコンプライアンス承認 | `Workflow` + `RequestInput` / `ResumabilityConfig` |
+| 🏆 | **Capstone** | [`patterns/capstone/`](patterns/capstone/) | 全構文統合 企業分析レポート | `Workflow` 全構文統合（`JoinNode` + `@node` ルーター） |
 | 発展 | **Agentic Pipeline** | [`patterns/agentic_pipeline/`](patterns/agentic_pipeline/) | PGE 自律コード生成パイプライン | ADK `BaseAgent` + Antigravity SDK |
 
 ---
@@ -146,8 +146,9 @@ flowchart LR
 ADK 1.x から 2.x への詳細な移行手順は [`docs/v1-to-v2-migration-guide.md`](docs/v1-to-v2-migration-guide.md) を参照してください。
 
 1. **宣言的グラフ API（`Workflow`）**: `SequentialAgent` / `ParallelAgent` / `LoopAgent` の代わりに `Workflow(edges=[...])` で直列チェーン・並列タプル・条件付きサイクルを統一記述します。
-2. **`Workflow` は `BaseNode` サブクラス**: `LlmAgent(sub_agents=[...])` の中には直接入れず、上位の `Workflow` エッジに組み込みます。また `Runner` 実行時は `Runner(node=workflow, ...)`（または `App` 経由で `Runner(app=app, ...)`）を使用します。
-3. **Gemini 3.8 Flash のエンドポイント設定**: Gemini Enterprise Agent Platform 上で `gemini-3.8-flash` を利用する際は `GOOGLE_CLOUD_LOCATION=global` および `GOOGLE_GENAI_USE_ENTERPRISE=True`（互換用に `GOOGLE_GENAI_USE_VERTEXAI=True` も併用）を設定します。
+2. **並列 Fan-in の `JoinNode` と条件分岐の `@node` ルーター**: 並列タプル `(a, b)` の直後には全ブランチの完了を同期する `JoinNode` を配置します（省略するとブランチ数だけ後続ノードが重複発火します）。また、`LlmAgent` は `route` を返さないため、条件付きサイクルの分岐判定と反復上限（`MAX_ITERATIONS`）は `Event(route=...)` を返す `@node` 関数で行います。
+3. **`Workflow` は `BaseNode` サブクラス**: `LlmAgent(sub_agents=[...])` の中には直接入れず、上位の `Workflow` エッジに組み込みます。また `Runner` 実行時は `Runner(node=workflow, ...)`（中断・再開を使う場合は `App(..., resumability_config=ResumabilityConfig(is_resumable=True))` 経由で `Runner(app=app, ...)`）を使用します。
+4. **Gemini 3.8 Flash のエンドポイント設定**: Gemini Enterprise Agent Platform 上で `gemini-3.8-flash` を利用する際は `GOOGLE_CLOUD_LOCATION=global` および `GOOGLE_GENAI_USE_ENTERPRISE=True`（互換用に `GOOGLE_GENAI_USE_VERTEXAI=True` も併用）を設定します。
 
 ---
 
