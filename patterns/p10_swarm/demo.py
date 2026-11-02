@@ -1,8 +1,10 @@
 """Swarm Pattern デモ - 製品設計コンセンサス。"""
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from agent import root_agent
+
 from shared.demo_runner import run_demo
 
 if __name__ == "__main__":

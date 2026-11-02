@@ -1,69 +1,112 @@
 """共通設定モジュール。
 
-Vertex AI ADC を使った認証設定と、全エージェントで共有する設定値を提供する。
-@lru_cache を使って遅延初期化し、テスト時にオーバーライド可能な設計。
+Gemini Enterprise Agent Platform（旧 Vertex AI）の ADC（Application Default Credentials）を
+使った認証設定と、全エージェントパターンで共有する設定値を提供する。
+`@lru_cache` を使って遅延初期化し、テスト時にキャッシュクリアで上書き可能な設計としている。
 
-NOTE: pydantic_settings は .env → Settings オブジェクトに読み込むだけで
-os.environ には反映しない。ADK (google.genai.Client) は os.environ を
-直接参照するため、get_settings() で環境変数の同期も行う。
+NOTE: `pydantic_settings` は `.env` から `Settings` オブジェクトへ値を読み込むだけで、
+`os.environ` 自体は書き換えない。一方、`google-adk` / `google-genai` は `os.environ` を
+直接参照するため、`get_settings()` 内で必要な環境変数の同期（`_sync_env_vars`）を行う。
 """
 
 import os
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # プロジェクトルート（shared/ の親ディレクトリ）
 _PROJECT_ROOT = Path(__file__).parent.parent
 
+_VALID_THINKING_LEVELS = {"MINIMAL", "LOW", "MEDIUM", "HIGH"}
+
 
 class Settings(BaseSettings):
-    """アプリケーション設定。環境変数から自動的に読み込む。
+    """アプリケーション共通設定。環境変数または `.env` から読み込む。
 
-    必須: GOOGLE_CLOUD_PROJECT
-    認証: GOOGLE_GENAI_USE_VERTEXAI=True (ADK 側で自動的に Vertex AI を使用)
+    必須:
+        GOOGLE_CLOUD_PROJECT: Google Cloud プロジェクト ID
+    認証:
+        GOOGLE_GENAI_USE_VERTEXAI=True（デフォルト: ADC を使用して Vertex AI 経由で呼び出す）
+    エンドポイント:
+        GOOGLE_CLOUD_LOCATION=global（`gemini-3.8-flash` は `global` / `us` / `eu` で提供）
     """
 
     # Google Cloud 設定（必須）
     google_cloud_project: str
-    google_cloud_location: str = "us-central1"
+    google_cloud_location: str = "global"
 
-    # Vertex AI 認証フラグ（True = ADC 使用、False = API Key 使用）
+    # Gemini Enterprise Agent Platform（旧 Vertex AI）認証フラグ（True = ADC 使用、False = API Key 使用）
+    # google-adk 2.13+ では GOOGLE_GENAI_USE_ENTERPRISE が推奨、互換性のため両方同期する
+    google_genai_use_enterprise: bool | None = None
     google_genai_use_vertexai: bool = True
 
-    # モデル設定
-    default_model: str = "gemini-3.5-flash"
+    # モデル設定（公開 GA / Preview モデル ID）
+    default_model: str = "gemini-3.8-flash"
+    fast_model: str = "gemini-3.5-flash-lite"
+    escalation_model: str = "gemini-3.1-pro-preview"
 
-    # エージェント設定
+    # 推論深さ（gemini-3.8-flash は LOW / MEDIUM / HIGH のみ対応。MINIMAL は非対応）
+    thinking_level: str = "MEDIUM"
+
+    # エージェント実行ガードレール
+    adk_max_llm_calls: int = 500
     max_loop_iterations: int = 5
-    agent_temperature: float = 0.1  # 一貫性重視
+    agent_temperature: float = 0.1  # 一貫性・再現性を重視
 
-    # PGE ループ設定
-    approval_threshold: int = 80  # Evaluator スコア閾値（0-100）
-    min_improvement: int = 5  # 改善停滞と判定する最低改善幅
+    # PGE ループ設定（agentic_pipeline パターン用）
+    approval_threshold: int = 80  # Evaluator 承認スコア閾値（0-100）
+    min_improvement: int = 5  # 改善停滞と判定する最低スコア改善幅
 
-    # Antigravity SDK 設定（agentic_pipeline パターン用）
-    gemini_api_key: str | None = None  # Antigravity local harness に必須
+    # Antigravity SDK 設定（agentic_pipeline パターン用: 未設定時は Vertex AI ADC を使用）
+    gemini_api_key: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=str(_PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
+
+    @field_validator("thinking_level")
+    @classmethod
+    def _normalize_thinking_level(cls, value: str) -> str:
+        """thinking_level を大文字に正規化し、許容値かを検証する。"""
+        normalized = value.strip().upper()
+        if normalized not in _VALID_THINKING_LEVELS:
+            raise ValueError(
+                f"thinking_level は {sorted(_VALID_THINKING_LEVELS)} のいずれかを指定してください: {value!r}"
+            )
+        return normalized
+
+    @model_validator(mode="after")
+    def _validate_model_thinking_compatibility(self) -> "Settings":
+        """gemini-3.8-flash で非対応の thinking_level='MINIMAL' を事前に検出する。"""
+        if self.default_model.startswith("gemini-3.8-flash") and self.thinking_level == "MINIMAL":
+            raise ValueError(
+                "gemini-3.8-flash は thinking_level='MINIMAL' に対応していません。"
+                " 'LOW' / 'MEDIUM' / 'HIGH' のいずれかを指定してください。"
+            )
+        return self
 
 
 def _sync_env_vars(settings: Settings) -> None:
-    """ADK が os.environ から直接参照する環境変数を同期する。
+    """ADK および GenAI SDK が `os.environ` から直接参照する環境変数を同期する。
 
-    pydantic_settings は .env → Settings に読み込むだけで os.environ には
-    反映しないため、ADK が必要とする変数を明示的にセットする。
-    既に os.environ に値がある場合は上書きしない（明示的な export を優先）。
+    既に `os.environ` に明示的な値がある場合は上書きしない（シェルでの export を優先）。
     """
+    use_enterprise = (
+        settings.google_genai_use_enterprise
+        if settings.google_genai_use_enterprise is not None
+        else settings.google_genai_use_vertexai
+    )
     env_mapping: dict[str, str | None] = {
         "GOOGLE_CLOUD_PROJECT": settings.google_cloud_project,
         "GOOGLE_CLOUD_LOCATION": settings.google_cloud_location,
-        "GOOGLE_GENAI_USE_VERTEXAI": str(settings.google_genai_use_vertexai),
+        "GOOGLE_GENAI_USE_ENTERPRISE": str(use_enterprise),
+        "GOOGLE_GENAI_USE_VERTEXAI": str(use_enterprise),
+        "ADK_MAX_LLM_CALLS": str(settings.adk_max_llm_calls),
         "GEMINI_API_KEY": settings.gemini_api_key,
     }
     for key, value in env_mapping.items():
@@ -75,10 +118,8 @@ def _sync_env_vars(settings: Settings) -> None:
 def get_settings() -> Settings:
     """設定のシングルトンを取得する。
 
-    テスト時は lru_cache をクリアして上書き可能:
-        get_settings.cache_clear()
+    テスト時は `get_settings.cache_clear()` でキャッシュを破棄して再読み込みできる。
     """
-    settings = Settings()
+    settings = Settings()  # type: ignore[call-arg]
     _sync_env_vars(settings)
     return settings
-

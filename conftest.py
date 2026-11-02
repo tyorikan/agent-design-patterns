@@ -10,10 +10,12 @@
 """
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
 from dotenv import load_dotenv
 
 # プロジェクトルートを sys.path に追加
@@ -24,6 +26,21 @@ sys.path.insert(0, str(ROOT))
 env_file = ROOT / ".env"
 if env_file.exists():
     load_dotenv(env_file)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """オフラインのユニットテスト実行時に未設定の GOOGLE_CLOUD_PROJECT を補完する。
+
+    統合テスト（`tests/integration`）実行時は実際の Google Cloud プロジェクト指定を必須とするため、
+    ダミー値は設定しない。
+    """
+    args_str = " ".join(str(a) for a in config.args)
+    is_integration = "integration" in args_str or not config.args
+    if not is_integration:
+        os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "unit-test-project")
+        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
+        os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "True")
+        os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
 
 # =====================================================

@@ -1,21 +1,22 @@
 """Antigravity Agent ラッパーツール。
 
-ADK の LlmAgent から呼び出される tool 関数として、
-各 Antigravity Agent をラップする。
+ADK の BaseAgent / LlmAgent から呼び出されるツール関数として、
+各 Antigravity Agent（Planner / Generator / Evaluator）をラップする。
 
-認証: Antigravity local harness は Gemini API Key が必須。
-      環境変数 GEMINI_API_KEY から取得する。
+認証（google-antigravity 0.1.23+ 対応）:
+    - `GEMINI_API_KEY` が設定されている場合: Gemini Developer API エンドポイントを使用
+    - 未設定かつ `GOOGLE_GENAI_USE_VERTEXAI=True` の場合: Vertex AI ADC（project / location）を使用
 """
 
 import json
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from google.antigravity import Agent, CapabilitiesConfig, LocalAgentConfig
-from google.antigravity.hooks import policy
-from google.antigravity.types import GeminiConfig
 from google.adk.tools import ToolContext
+
+from shared.config import get_settings
 
 from .prompts import (
     GENERATOR_SYSTEM_PROMPT,
@@ -23,7 +24,9 @@ from .prompts import (
     build_evaluator_system_prompt,
 )
 from .schemas import ArtifactOutput, EvaluationOutput, PlanOutput
-from shared.config import get_settings
+
+if TYPE_CHECKING:
+    from google.antigravity import LocalAgentConfig
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,19 @@ DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # 後方互換: テストなどで直接参照しているコード用
 OUTPUT_DIR = DEFAULT_OUTPUT_DIR
+
+
+def _load_antigravity_sdk() -> tuple[Any, Any, Any, Any, Any]:
+    """Antigravity SDK モジュールを遅延ロードする。
+
+    `protobuf` バージョン不一致や軽量テスト環境でも `patterns.agentic_pipeline.agent` の
+    モジュールインポート自体は壊れないよう、実行・設定構築時に読み込む。
+    """
+    from google.antigravity import Agent, CapabilitiesConfig, LocalAgentConfig
+    from google.antigravity.hooks import policy
+    from google.antigravity.types import BuiltinTools
+
+    return Agent, BuiltinTools, CapabilitiesConfig, LocalAgentConfig, policy
 
 
 def _resolve_output_dir(tool_context: ToolContext) -> Path:
@@ -57,20 +73,22 @@ def _build_config(
     allow_commands: bool = False,
     allow_writes: bool = True,
     workspace_dir: str | None = None,
-) -> LocalAgentConfig:
-    """Antigravity Agent の共通設定を構築する。
+) -> "LocalAgentConfig":
+    """Antigravity Agent の共通設定（google-antigravity 0.1.23+ 対応）を構築する。
 
-    GEMINI_API_KEY 環境変数から API キーを取得し GeminiConfig に設定。
+    `GEMINI_API_KEY` が設定されていれば Gemini API エンドポイントを優先し、
+    未設定の場合は `Settings`（Vertex AI ADC + `default_model`）を使用する。
 
     Args:
         system_instructions: エージェントのシステムプロンプト
         response_schema: 構造化出力のスキーマ（Pydantic モデル）
-        allow_commands: True の場合、pytest/ruff の実行を許可する
-        allow_writes: True の場合、create_file/edit_file を有効化する
+        allow_commands: True の場合、テスト・lint 等の検証コマンド実行を許可する
+        allow_writes: False の場合、create_file / edit_file ツールをモデルコンテキストから無効化する
         workspace_dir: ファイル操作を制限するワークスペースディレクトリ
     """
-    api_key = os.environ.get("GEMINI_API_KEY")
-    gemini_config = GeminiConfig(api_key=api_key) if api_key else GeminiConfig()
+    _, BuiltinTools, CapabilitiesConfig, LocalAgentConfig, policy = _load_antigravity_sdk()
+    settings = get_settings()
+    api_key = os.environ.get("GEMINI_API_KEY") or settings.gemini_api_key
 
     # ポリシー構築: コマンド実行の許可/拒否を制御
     policies = []
@@ -113,16 +131,28 @@ def _build_config(
         )
     # allow_commands=False の場合はデフォルトの confirm_run_command() が適用される
 
-    # LocalAgentConfig の kwargs を動的に構築
-    # policies/workspaces が空の場合は渡さない（None は ValidationError になる）
-    config_kwargs: dict = {
+    capabilities = (
+        CapabilitiesConfig()
+        if allow_writes
+        else CapabilitiesConfig(
+            disabled_tools=[BuiltinTools.CREATE_FILE, BuiltinTools.EDIT_FILE]
+        )
+    )
+
+    config_kwargs: dict[str, Any] = {
         "system_instructions": system_instructions,
         "response_schema": response_schema,
-        "gemini_config": gemini_config,
+        "model": settings.default_model,
+        "capabilities": capabilities,
     }
-    # allow_writes=True の場合のみ書き込みツール（create_file, edit_file）を有効化
-    if allow_writes:
-        config_kwargs["capabilities"] = CapabilitiesConfig()
+    if api_key:
+        config_kwargs["api_key"] = api_key
+        config_kwargs["vertex"] = False
+    else:
+        config_kwargs["vertex"] = settings.google_genai_use_vertexai
+        config_kwargs["project"] = settings.google_cloud_project
+        config_kwargs["location"] = settings.google_cloud_location
+
     if policies:
         config_kwargs["policies"] = policies
     if workspace_dir:
@@ -196,6 +226,7 @@ async def run_planner_agent(
     elif not existing_files:
         logger.info("Planner: 初回設計モード（新規プロジェクト）")
 
+    Agent, _, _, _, _ = _load_antigravity_sdk()
     async with Agent(config) as agent:
         response = await agent.chat(prompt)
         result = await response.structured_output()
@@ -276,6 +307,7 @@ async def run_generator_agent(
             prompt += f"\n### Evaluator からの指摘事項\n{feedback}\n"
 
     logger.info("Generator: コード生成開始（出力先: %s）", output_dir)
+    Agent, _, _, _, _ = _load_antigravity_sdk()
     async with Agent(config) as agent:
         response = await agent.chat(prompt)
         result = await response.structured_output()
@@ -349,6 +381,7 @@ async def run_evaluator_agent(
     )
 
     logger.info("Evaluator: レビュー開始（反復 %d/%d）", iteration, max_iterations)
+    Agent, _, _, _, _ = _load_antigravity_sdk()
     async with Agent(config) as agent:
         response = await agent.chat(prompt)
         result = await response.structured_output()

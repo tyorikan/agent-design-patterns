@@ -178,8 +178,8 @@ score=85. pytest 20/20 passed, ruff 0 errors...
 ### 前提条件
 
 - Python 3.12+
-- `google-adk` (ADK v2) + `google-antigravity` (Antigravity SDK)
-- `GEMINI_API_KEY`（Antigravity local harness に必須）
+- `google-adk>=2.13.0` (ADK v2) + `google-antigravity>=0.1.23` (Antigravity SDK)
+- Vertex AI ADC（`GOOGLE_GENAI_USE_VERTEXAI=True` + `GOOGLE_CLOUD_LOCATION=global`）または `GEMINI_API_KEY`
 
 ### インストール
 

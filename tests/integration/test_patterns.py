@@ -16,7 +16,6 @@ import pytest
 
 from conftest import (
     load_pattern_agent,
-    run_agent_all_text,
     run_agent_final_response,
     run_agent_trajectory,
 )

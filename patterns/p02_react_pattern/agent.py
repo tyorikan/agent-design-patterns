@@ -9,7 +9,6 @@
     ReAct ループの各フェーズを追跡できる。
 """
 
-import asyncio
 import sys
 from pathlib import Path
 

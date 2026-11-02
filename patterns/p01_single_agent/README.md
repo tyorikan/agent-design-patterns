@@ -38,7 +38,7 @@ User Question
      ▼
 ┌─────────────────────────────────────┐
 │         GCP Docs Agent              │
-│  model: gemini-3.5-flash            │
+│  model: gemini-3.8-flash            │
 │                                     │
 │  Tools:                             │
 │  - google_search: Web 検索          │

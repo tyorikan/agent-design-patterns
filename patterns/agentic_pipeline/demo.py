@@ -14,12 +14,12 @@ import asyncio
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+from rich.console import Console
+
 # プロジェクトルートを sys.path に追加
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT))
-
-from dotenv import load_dotenv
-from rich.console import Console
 
 load_dotenv(ROOT / ".env")
 

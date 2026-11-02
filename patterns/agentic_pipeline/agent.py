@@ -32,11 +32,11 @@ from google.adk.events import Event
 from google.genai import types
 
 from .tools import (
+    DEFAULT_OUTPUT_DIR,
     run_evaluator_agent,
     run_generator_agent,
     run_planner_agent,
 )
-from .tools import DEFAULT_OUTPUT_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ def _extract_file_description(filepath: Path) -> str:
     for line in lines[:10]:
         stripped = line.strip()
         if stripped.startswith(("#", "//", "/*", "*")):
-            comment = stripped.lstrip("#//* ").strip()
+            comment = stripped.lstrip("#/* ").strip()
             if comment and len(comment) > 5:
                 return comment
     return ""

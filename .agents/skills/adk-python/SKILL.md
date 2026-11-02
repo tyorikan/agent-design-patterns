@@ -14,7 +14,7 @@ description: |
 **ADK (Agent Development Kit)** は Google が提供するオープンソースの Python フレームワーク。
 Gemini モデルを使ったエージェントの定義・オーケストレーション・デプロイを体系化する。
 
-- **バージョン**: ADK Python 2.8.0 (2026-08-25 リリース)
+- **バージョン**: ADK Python 2.13.0 (2026-10 リリース)
 - **PyPI**: `google-adk`
 - **GitHub**: https://github.com/google/adk-python
 - **公式ドキュメント**: https://adk.dev / https://google.github.io/adk-docs/
@@ -25,11 +25,11 @@ Gemini モデルを使ったエージェントの定義・オーケストレー�
 
 ```bash
 # uv を使う場合（推奨）
-uv add "google-adk>=2.8.0"
-uv add "google-genai>=2.22.0"  # Vertex AI / Google AI Studio 共通 SDK
+uv add "google-adk>=2.13.0"
+uv add "google-genai>=2.30.0"  # Gemini Enterprise Agent Platform (Vertex AI) / Google AI Studio 共通 SDK
 
 # pip を使う場合
-pip install "google-adk>=2.8.0"
+pip install "google-adk>=2.13.0" "google-genai>=2.30.0"
 ```
 
 ### 環境変数

@@ -7,12 +7,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent.parent / ".env")
-
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -21,8 +16,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
 
-from agent import compliance_checker, content_creator, final_publisher
-from shared.config import get_settings
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
+
+from agent import compliance_checker, content_creator, final_publisher  # noqa: E402
+
+from shared.config import get_settings  # noqa: E402
 
 console = Console()
 settings = get_settings()

@@ -53,7 +53,7 @@ User: "Cloud Run のブログ記事を書いて"
 │   Workflow（条件付きサイクル）           │
 │                                         │
 │  [blog_generator]                       │
-│    model: gemini-3.5-flash              │
+│    model: gemini-3.8-flash              │
 │    ├── 600〜800文字の技術ブログ記事     │
 │    └── output_key="article_draft"       │
 │         │                               │

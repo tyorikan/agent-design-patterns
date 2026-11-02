@@ -27,9 +27,9 @@
 ## 技術スタック
 
 - **言語**: Python 3.12+
-- **パッケージ管理**: pip (pyproject.toml) + uv (Docker)
-- **エージェントフレームワーク**: Google ADK Python 2.8.0 (Workflow API)
-- **LLM**: Vertex AI Gemini 3.8 Flash (location=global, Thinking Level 対応)
-- **エージェント間通信**: A2A Protocol
+- **パッケージ管理**: uv / pip (pyproject.toml) + CLI ツール分離 (`uv tool install "google-agents-cli>=1.12.0"`)
+- **エージェントフレームワーク**: Google ADK Python 2.13.0 (Workflow API / App / Resumability / BasePlugin)
+- **LLM**: Gemini Enterprise Agent Platform (Vertex AI) `gemini-3.8-flash` (`location=global`, Thinking Level `LOW`/`MEDIUM`/`HIGH`) / `gemini-3.5-flash-lite`
+- **エージェント間通信**: A2A Protocol (`a2a-sdk`)
 - **外部ツール連携**: MCP (Model Context Protocol)
-- **デプロイ**: Cloud Run / Vertex AI Agent Engine
+- **デプロイ**: Cloud Run / Agent Runtime (旧 Vertex AI Agent Engine)

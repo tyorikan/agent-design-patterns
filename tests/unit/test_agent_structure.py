@@ -6,9 +6,7 @@ output_key の設定を検証する。ミリ秒で完了する。
 ADK v2: SequentialAgent/ParallelAgent/LoopAgent → Workflow に移行済み。
 """
 
-from pathlib import Path
 
-import pytest
 from google.adk.agents import LlmAgent
 from google.adk.workflow import Workflow
 
@@ -325,7 +323,6 @@ class TestAgenticPipelineStructure:
 
     def test_root_agent_is_pge_orchestrator(self):
         """PGEOrchestrator クラスのインスタンスである。"""
-        from patterns.agentic_pipeline.agent import PGEOrchestrator
         # モジュール二重ロード問題を回避
         assert type(self.mod.root_agent).__name__ == "PGEOrchestrator"
 
@@ -388,4 +385,27 @@ class TestAgenticPipelineStructure:
         )
         assert "2/3" in prompt
         assert "[65]" in prompt
+
+    def test_antigravity_config_builder(self):
+        """Antigravity 0.1.23+ の LocalAgentConfig が Vertex/read-only 設定で構築できる。"""
+        from google.antigravity.types import BuiltinTools
+
+        from patterns.agentic_pipeline.tools import _build_config
+
+        ro_cfg = _build_config(
+            system_instructions="Evaluator test",
+            allow_commands=True,
+            allow_writes=False,
+        )
+        assert ro_cfg.capabilities.disabled_tools is not None
+        assert BuiltinTools.CREATE_FILE in ro_cfg.capabilities.disabled_tools
+        assert BuiltinTools.EDIT_FILE in ro_cfg.capabilities.disabled_tools
+
+        rw_cfg = _build_config(
+            system_instructions="Generator test",
+            allow_commands=True,
+            allow_writes=True,
+        )
+        assert rw_cfg.capabilities.disabled_tools is None
+
 

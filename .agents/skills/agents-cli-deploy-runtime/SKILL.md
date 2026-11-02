@@ -15,8 +15,8 @@ metadata:
 
 # agents-cli Deploy to Agent Runtime
 
-> **前提:** `agents-cli` v1.4+ がインストール済みであること。
-> インストール: `uv tool install google-agents-cli`
+> **前提:** `agents-cli` v1.12+ がインストール済みであること。
+> インストール: `uv tool install "google-agents-cli>=1.12.0"`
 
 ## 1. agents-cli のプロジェクト構造（必須要件）
 
@@ -26,32 +26,47 @@ Agent Runtime にデプロイするには、`agents-cli` が期待するプロ�
 
 ```
 project-root/
+├── .agents-cli-spec.md           # Spec-Driven Agent 仕様書（推奨）
+├── AGENTS.md                     # AI エージェント向けコーディング規約
 ├── app/                          # agents-cli が認識するエントリーポイント
-│   ├── __init__.py               # `app` をエクスポート
-│   ├── agent.py                  # Agent 定義
+│   ├── __init__.py               # `app` (ADK App インスタンス) をエクスポート
+│   ├── agent.py                  # `root_agent` と `app = App(root_agent=..., name="app")`
 │   └── fast_api_app.py           # FastAPI エントリーポイント（uvicorn が起動するファイル）
-├── agents-cli-manifest.yaml      # agents-cli 設定ファイル
+├── agents-cli-manifest.yaml      # agents-cli 1.12+ プロジェクト設定ファイル
 ├── pyproject.toml
 ├── Dockerfile                    # コンテナビルド用
-└── .env                          # 環境変数
+└── .env                          # 環境変数（Git 管理対象外）
 ```
 
-### agents-cli-manifest.yaml
+### agents-cli-manifest.yaml（agents-cli 1.12+ 準拠）
 
 ```yaml
-version: v1
+name: my-agent
+acli_version: "1.12.0"
+agent_directory: app
+region: us-central1
+base_template: adk_python
+language: python
+framework: google-adk
 create_params:
-  agent_name: "my-agent"               # Agent 表示名
-  framework: "google-adk"              # フレームワーク
-  deployment_target: "agent_runtime"   # デプロイ先
-  model: "gemini-3.8-flash"
+  root_agent_name: root_agent
+  deployment_target: agent_runtime
+  session_type: in_memory
+  cicd_runner: google_cloud_build
+  is_a2a: false
+  agent_gateway: false
+  agent_guidance_filename: AGENTS.md
+  agent_runtime:
+    identity_default: service_account
 ```
 
 ### app/__init__.py
 
 ```python
-"""App entrypoint. agents-cli と Agent Runtime はこのモジュールの `app` を探す。"""
-from app.fast_api_app import app  # noqa: F401
+"""App entrypoint. agents-cli は `app/__init__.py` から ADK `App` を参照する。"""
+from app.agent import app
+
+__all__ = ["app"]
 ```
 
 ### app/fast_api_app.py
