@@ -30,6 +30,7 @@ class TestEnvExample:
             "GOOGLE_GENAI_USE_VERTEXAI=True",
             "DEFAULT_MODEL=gemini-3.8-flash",
             "FAST_MODEL=gemini-3.5-flash-lite",
+            "ESCALATION_MODEL=gemini-4-argon",
             "ADK_MAX_LLM_CALLS=500",
         ]
         for key in required_keys:
@@ -49,6 +50,7 @@ class TestSettings:
         assert settings.google_cloud_location == "global"
         assert settings.default_model == "gemini-3.8-flash"
         assert settings.fast_model == "gemini-3.5-flash-lite"
+        assert settings.escalation_model == "gemini-4-argon"
         assert settings.thinking_level == "MEDIUM"
         assert settings.adk_max_llm_calls == 500
 
@@ -69,6 +71,17 @@ class TestSettings:
             Settings(
                 google_cloud_project="unit-test-project",
                 default_model="gemini-3.8-flash",
+                thinking_level="MINIMAL",
+            )
+
+    def test_rejects_minimal_thinking_on_gemini_4_argon(self) -> None:
+        """gemini-4-argon でも非対応の thinking_level='MINIMAL' が事前拒否されることを確認。"""
+        from shared.config import Settings
+
+        with pytest.raises(ValidationError, match="MINIMAL"):
+            Settings(
+                google_cloud_project="unit-test-project",
+                default_model="gemini-4-argon",
                 thinking_level="MINIMAL",
             )
 

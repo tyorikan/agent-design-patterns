@@ -155,10 +155,10 @@ uv run ruff check .
 | `gemini-3.8-flash` | 高速・高精度（最新 GA 推奨） | 低 |
 | `gemini-3.8-flash` + `thinking_level=HIGH` | 深い推論が必要な複雑タスク | 中 |
 | `gemini-3.5-flash-lite` | 超低レイテンシ・一次分類・カスケード前段 | 最安 |
-| `gemini-3.1-pro-preview` | 高難度エスカレーション（Preview） | 高 |
+| `gemini-4-argon` | 最上位フロンティア推論・高難度エスカレーション（GA） | 高 |
 
-> **Note:** `gemini-3.8-flash` は `location=global` / `us` / `eu` のみで利用可能（単一リージョン `us-central1` は非対応）。
-> また、`gemini-3.8-flash` の `thinking_level` は `LOW` / `MEDIUM` / `HIGH` のみ対応しており、`MINIMAL` を指定するとバリデーションエラーになる。
+> **Note:** `gemini-3.8-flash` および `gemini-4-argon` は `location=global` / `us` / `eu` 等で利用可能（`us-central1` 単一リージョンは非対応）。
+> また、両モデルとも `thinking_level` は `LOW` / `MEDIUM` / `HIGH` のみ対応しており、`MINIMAL` を指定すると HTTP 400 バリデーションエラーになる（`gemini-4-argon` では `temperature` / `top_p` / `top_k` も無視されるため指定不要）。
 
 ```python
 from google.genai.types import GenerateContentConfig, ThinkingConfig

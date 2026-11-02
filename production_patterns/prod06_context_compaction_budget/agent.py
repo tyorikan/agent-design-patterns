@@ -66,8 +66,13 @@ class ModelPricing:
     output_per_1m: float
 
 
-# Gemini Enterprise Agent Platform 公開料金（global / Standard ティア、2026-12-31 までのプロモーション単価を含む）
+# Gemini Enterprise Agent Platform 公開料金（global / Standard ティア、プロモーション期間単価を含む）
 VERIFIED_MODEL_PRICING_USD_PER_1M: dict[str, ModelPricing] = {
+    "gemini-4-argon": ModelPricing(
+        input_per_1m=2.00,
+        cached_input_per_1m=0.10,
+        output_per_1m=10.00,
+    ),
     "gemini-3.8-flash": ModelPricing(
         input_per_1m=0.75,
         cached_input_per_1m=0.075,

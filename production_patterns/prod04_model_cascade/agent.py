@@ -296,9 +296,14 @@ def build_cascade_workflow(
         "output_key": "strong_answer",
     }
     if isinstance(m_strong, str):
+        # gemini-4-argon はサンプリングパラメータ（temperature / top_p / top_k）を無視する公式仕様のため除外する
+        strong_gen_kwargs: dict[str, Any] = {
+            "thinking_config": types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH),
+        }
+        if not m_strong.startswith("gemini-4-argon"):
+            strong_gen_kwargs["temperature"] = 0.1
         strong_kwargs["generate_content_config"] = types.GenerateContentConfig(
-            temperature=0.1,
-            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH),
+            **strong_gen_kwargs
         )
     strong_agent = LlmAgent(**strong_kwargs)
 

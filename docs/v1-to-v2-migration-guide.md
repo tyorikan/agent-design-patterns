@@ -106,7 +106,7 @@ sequenceDiagram
 | カテゴリ | API | import パス | 備考 |
 |---------|-----|-----------|------|
 | **エージェント** | `LlmAgent` | `from google.adk.agents import LlmAgent` | クラス名・引数とも変更なし |
-| | `model` | `LlmAgent(model="...")` | デフォルト: `gemini-2.5-flash` |
+| | `model` | `LlmAgent(model="...")` | 省略時のライブラリ内部既定は旧世代モデルのため、必ず `gemini-3.8-flash` または `gemini-4-argon` を明示指定 |
 | | `instruction` | `LlmAgent(instruction="...")` | `{variable_name}` プレースホルダーも健在 |
 | | `output_key` | `LlmAgent(output_key="...")` | state スコープ (`user:`, `app:`, `temp:`) も同じ |
 | | `sub_agents` | `LlmAgent(sub_agents=[...])` | LLM ルーティングで動的委譲 |

@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     認証:
         GOOGLE_GENAI_USE_VERTEXAI=True（デフォルト: ADC を使用して Vertex AI 経由で呼び出す）
     エンドポイント:
-        GOOGLE_CLOUD_LOCATION=global（`gemini-3.8-flash` は `global` / `us` / `eu` で提供）
+        GOOGLE_CLOUD_LOCATION=global（`gemini-3.8-flash` / `gemini-4-argon` は `global` / `us` / `eu` で提供）
     """
 
     # Google Cloud 設定（必須）
@@ -42,12 +42,12 @@ class Settings(BaseSettings):
     google_genai_use_enterprise: bool | None = None
     google_genai_use_vertexai: bool = True
 
-    # モデル設定（公開 GA / Preview モデル ID）
+    # モデル設定（公開 GA モデル ID: Flash 系=3.8-flash / 軽量系=3.5-flash-lite / 最上位推論=4-argon）
     default_model: str = "gemini-3.8-flash"
     fast_model: str = "gemini-3.5-flash-lite"
-    escalation_model: str = "gemini-3.1-pro-preview"
+    escalation_model: str = "gemini-4-argon"
 
-    # 推論深さ（gemini-3.8-flash は LOW / MEDIUM / HIGH のみ対応。MINIMAL は非対応）
+    # 推論深さ（gemini-3.8-flash / gemini-4-argon は LOW / MEDIUM / HIGH のみ対応。MINIMAL は非対応）
     thinking_level: str = "MEDIUM"
 
     # エージェント実行ガードレール
@@ -82,10 +82,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_model_thinking_compatibility(self) -> "Settings":
-        """gemini-3.8-flash で非対応の thinking_level='MINIMAL' を事前に検出する。"""
-        if self.default_model.startswith("gemini-3.8-flash") and self.thinking_level == "MINIMAL":
+        """gemini-3.8-flash / gemini-4-argon で非対応の thinking_level='MINIMAL' を事前に検出する。"""
+        if (
+            self.default_model.startswith(("gemini-3.8-flash", "gemini-4-argon"))
+            and self.thinking_level == "MINIMAL"
+        ):
             raise ValueError(
-                "gemini-3.8-flash は thinking_level='MINIMAL' に対応していません。"
+                f"{self.default_model} は thinking_level='MINIMAL' に対応していません。"
                 " 'LOW' / 'MEDIUM' / 'HIGH' のいずれかを指定してください。"
             )
         return self

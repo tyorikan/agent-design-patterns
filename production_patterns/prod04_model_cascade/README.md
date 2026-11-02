@@ -2,7 +2,7 @@
 
 ## 概念
 
-**Model Cascade（段階的モデルエスカレーション）** は、まず低遅延・低単価な軽量モデル（例: `gemini-3.5-flash-lite`）で一次回答を生成し、決定論的な事前検査と校正済みの二値審査モデル（Judge）を通過した場合はそのまま即答し、品質基準を満たさない難問だけを上位モデル（または高思考レベル `HIGH`）へ段階的にエスカレーションするデザインパターンです。
+**Model Cascade（段階的モデルエスカレーション）** は、まず低遅延・低単価な軽量モデル（例: `gemini-3.5-flash-lite`）で一次回答を生成し、決定論的な事前検査と校正済みの二値審査モデル（Judge: `gemini-3.8-flash`）を通過した場合はそのまま即答し、品質基準を満たさない難問だけを最上位推論モデル（`gemini-4-argon` / 高思考レベル `HIGH`）へ段階的にエスカレーションするデザインパターンです。
 
 単一モデル構成では「全件に上位モデルを使って定型質問のレイテンシと推論費が増大する」か「全件を軽量モデルにして複雑な問い合わせで品質低下を招く」かの二択になります。本パターンでは以下の 3 要素を組み合わせることで、品質とコスト・応答速度のバランスを最適化します。
 
@@ -14,7 +14,7 @@
 flowchart LR
     Q["ユーザー質問"] --> Fast["Fast Drafter (LlmAgent)<br/>gemini-3.5-flash-lite (MINIMAL)"]
     Fast --> Pre["Deterministic Pre-Gate (@node)<br/>1ms 未満・推論コストゼロ"]
-    Pre -->|"ESCALATE_DIRECT (構造不備)"| Strong["Strong Escalation (LlmAgent)<br/>上位モデル / HIGH 思考"]
+    Pre -->|"ESCALATE_DIRECT (構造不備)"| Strong["Strong Escalation (LlmAgent)<br/>gemini-4-argon (HIGH)"]
     Pre -->|"RUN_JUDGE"| Judge["Binary Judge (LlmAgent)<br/>gemini-3.8-flash (LOW)"]
     Judge --> Router["Cascade Router (@node)<br/>Fail-Closed all(criteria)"]
     Router -->|"ACCEPT_FAST"| OutFast["一次回答を確定返却"]
@@ -43,7 +43,7 @@ flowchart LR
 
 **クラウド技術サポートの二段階応答ワークフロー**
 
-定型的な実装手順の問い合わせ（例: HTTP 429 エラー時の指数バックオフ実装）は `gemini-3.5-flash-lite` で即答し、回答が不十分な場合のみ `HIGH` 思考の上位モデルへ自動エスカレーションします。あわせて、審査モデルの感度・特異度から真の合格率と実効コストを算出します。
+定型的な実装手順の問い合わせ（例: HTTP 429 エラー時の指数バックオフ実装）は `gemini-3.5-flash-lite` で即答し、回答が不十分な場合のみ `gemini-4-argon`（`HIGH` 思考）へ自動エスカレーションします。あわせて、審査モデルの感度・特異度から真の合格率と実効コストを算出します。
 
 ## アーキテクチャと実装のポイント
 
