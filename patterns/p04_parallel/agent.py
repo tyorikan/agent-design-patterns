@@ -1,20 +1,19 @@
 """Parallel Pattern - マルチソース AI ニュース集約エージェント（Workflow v2）。
 
-ADK v2 の Workflow ネストタプルで Parallel fan-out/fan-in を実現。
-('START', (a, b, c, d), aggregator) で並列 → 集約を表現する。
+ADK v2 の Workflow ネストタプル + `JoinNode` で Parallel fan-out / fan-in を実現する。
+`('START', (a, b, c, d), join_research, synthesizer)` と定義することで、
+4 エージェント全ての完了を `JoinNode` がバリア同期してから `synthesizer` を **1 回だけ** 起動する。
 
-⚠️ v2 Workflow のデータ受け渡し:
-  並列ノード（ネストタプル）の output_key は state_delta 経由で
-  セッション状態に書き込まれるが、fan-in ノードの instruction が
-  評価される時点でマージが保証されない場合がある。
-  → fan-in ノードの instruction は **callable** にして
-    ReadonlyContext.state から安全に参照する。
+⚠️ ADK 2.x における `JoinNode` の必須性:
+  並列タプルの直後に `JoinNode` を挟まず直接 `synthesizer` を置くと、
+  各リサーチャーが完了するたびに `synthesizer` が起動して計 4 回重複実行されてしまう。
+  必ず `JoinNode` で合流させ、さらに防御的に callable instruction（`ctx.state.get()`）で参照する。
 
-データフロー（並列）:
+データフロー（並列 + バリア同期）:
     ┌→ [Google AI Researcher]  output_key="google_ai_news"   →┐
-    ├→ [OpenAI Researcher]     output_key="openai_news"      →├→ [Synthesizer]
-    ├→ [Regulation Researcher] output_key="regulation_news"  →┘
-    └→ [Industry Researcher]   output_key="industry_news"
+    ├→ [OpenAI Researcher]     output_key="openai_news"      →├→ [JoinNode] → [Synthesizer]
+    ├→ [Regulation Researcher] output_key="regulation_news"  →┤
+    └→ [Industry Researcher]   output_key="industry_news"    →┘
 """
 
 import sys
@@ -22,7 +21,7 @@ from pathlib import Path
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.readonly_context import ReadonlyContext
-from google.adk.workflow import Workflow
+from google.adk.workflow import JoinNode, Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -42,8 +41,8 @@ google_ai_researcher = LlmAgent(
     description="Google の AI/Gemini の最新動向を調査する",
     instruction="""\
 あなたは Google AI のリサーチャーです。
-ユーザーが調査を依頼したトピックに関連した、Google の AI（Gemini、Vertex AI、DeepMind）
-の最新動向を簡潔にまとめてください。
+ユーザーが調査を依頼したトピックに関連した、Google の AI
+（Gemini、Gemini Enterprise Agent Platform、Google DeepMind）の最新動向を簡潔にまとめてください。
 
 調査内容:
 - 最新モデルのリリースと性能
@@ -66,7 +65,7 @@ openai_researcher = LlmAgent(
 簡潔にまとめてください。
 
 調査内容:
-- 最新モデル（GPT-4o、o1 など）のアップデート
+- 最新モデルのアップデート
 - ChatGPT の新機能
 - API の変更・新機能
 - OpenAI の戦略・パートナーシップ
@@ -116,15 +115,17 @@ industry_researcher = LlmAgent(
     output_key="industry_news",  # 固有のキー
 )
 
+# =====================================================
+# バリア同期ノード（全並列リサーチャーの完了を待機）
+# =====================================================
+join_research = JoinNode(name="join_research")
+
 
 # =====================================================
 # 集約エージェント（並列結果をまとめる）
-# ★ v2 Workflow: ネストタプルの fan-in ノードでは
-#   instruction を callable にして ReadonlyContext.state から
-#   並列ノードの output_key を安全に参照する
 # =====================================================
 async def _build_synthesizer_instruction(ctx: ReadonlyContext) -> str:
-    """並列ノードの output_key を ReadonlyContext.state から安全に取得。"""
+    """並列ノードの output_key を ReadonlyContext.state から安全に取得する。"""
     google_ai = ctx.state.get("google_ai_news", "（データなし）")
     openai_news = ctx.state.get("openai_news", "（データなし）")
     regulation = ctx.state.get("regulation_news", "（データなし）")
@@ -157,7 +158,7 @@ async def _build_synthesizer_instruction(ctx: ReadonlyContext) -> str:
 （全体を通じた最重要トレンドを3点）
 
 ## テクノロジー競争の状況
-（Google vs OpenAI の比較と分析）
+（主要プレイヤー間の比較と分析）
 
 ## 規制環境の整理
 （企業が注意すべき規制動向）
@@ -173,13 +174,11 @@ synthesizer = LlmAgent(
     name="synthesizer",
     model=settings.default_model,
     description="並列収集した情報を統合してレポートを作成する",
-    instruction=_build_synthesizer_instruction,  # callable で安全に state 参照
+    instruction=_build_synthesizer_instruction,
 )
 
 # =====================================================
-# Workflow ネストタプルで Parallel fan-out/fan-in を実現
-# ('START', (a, b, c, d), synthesizer)
-#   → 4エージェント並列実行 → synthesizer で集約
+# Workflow ネストタプル + JoinNode で Parallel fan-out / fan-in を実現
 # =====================================================
 root_agent = Workflow(
     name="news_aggregator",
@@ -187,14 +186,13 @@ root_agent = Workflow(
     edges=[
         (
             "START",
-            # fan-out: 4エージェントを並列実行（レイテンシ削減）
             (
                 google_ai_researcher,
                 openai_researcher,
                 regulation_researcher,
                 industry_researcher,
             ),
-            # fan-in: 全並列結果を集約
+            join_research,
             synthesizer,
         ),
     ],

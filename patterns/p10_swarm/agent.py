@@ -1,24 +1,28 @@
 """Swarm Pattern - 製品設計コンセンサスエージェント（Workflow 版）。
 
 ADK v2 Workflow API を使用。
-旧 LoopAgent + SequentialAgent を Workflow の条件付きサイクルに移行。
-
-ADK の {変数名} の注意:
-    - Workflow の最初のイテレーション開始時、セッション状態が空
-    - market_expert（最初に実行）は {design_proposal} を参照できない
-    - 最初のエージェントはユーザーメッセージから直接読み取る
+市場・技術・財務の 3 名の専門家エージェントとファシリテーター（`consensus_builder`）が議論し、
+決定論的ルーター `@node`（`consensus_router`）が合意到達または最大ラウンド数（`MAX_ROUNDS`）まで
+サイクルを回す。
 
 実装アプローチ:
-    market_expert が最初に動き、提案を整理し market_proposal に保存。
-    以降のエージェントは {market_proposal} を参照しながら議論を深める。
-    finance_expert がコンセンサスレベルを判定し、未達なら REVISE で再議論。
+    1. `market_expert` が初回はユーザー要求から初期案を作成し、2 ラウンド目以降は前ラウンドの
+       `consensus_document` に残された未解決論点を踏まえて改訂提案を作成する。
+    2. `engineer_expert` → `finance_expert` → `consensus_builder` が順に多角的な評価・統合を行う。
+    3. `consensus_router`（`@node`）が `[CONSENSUS_REACHED]` / `[NEEDS_ANOTHER_ROUND]` と
+       ラウンド上限を検査し、`REVISE` ルートで次ラウンドへ戻すか完了させる。
 """
 
 import sys
 from pathlib import Path
+from typing import Any
 
 from google.adk.agents import LlmAgent
-from google.adk.workflow import Workflow
+from google.adk.agents.context import Context
+from google.adk.agents.readonly_context import ReadonlyContext
+from google.adk.events.event import Event
+from google.adk.workflow import Workflow, node
+from google.genai import types
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -26,29 +30,57 @@ from shared.config import get_settings
 
 settings = get_settings()
 
-# =====================================================
-# 専門家エージェント
-# market_expert が最初: {変数} を使わない
-# =====================================================
+MAX_ROUNDS = 3
 
-market_expert = LlmAgent(
-    name="market_expert",
-    model=settings.default_model,
-    description="市場・顧客視点から製品設計を評価・提案する専門家",
-    instruction="""\
-あなたはプロダクトマーケターです。
+
+def _extract_text(value: Any) -> str:
+    """ノード入力からプレーンテキストを抽出する。"""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, types.Content) and value.parts:
+        return "".join(
+            p.text for p in value.parts if p.text and not getattr(p, "thought", False)
+        )
+    return str(value or "")
+
+
+async def _build_market_expert_instruction(ctx: ReadonlyContext) -> str:
+    """初回は新規市場提案、2 ラウンド目以降は前ラウンドの未解決課題に対する改訂提案を指示する。"""
+    prev_consensus = ctx.state.get("consensus_document", "")
+    round_num = int(ctx.state.get("swarm_round", 0)) + 1
+
+    prior_section = ""
+    if prev_consensus:
+        prior_section = f"""
+## 前ラウンド（Round {round_num - 1}）の統合ドキュメントと未解決課題
+以下の未解決論点を解消するよう、市場・顧客視点からスコープや優先順位を調整した改訂案を提示してください:
+
+{prev_consensus}
+"""
+
+    return f"""\
+あなたはプロダクトマーケターです（議論 Round {round_num}）。
 
 ユーザーが提示した製品アイデアについて、市場・顧客視点から分析してください:
-
+{prior_section}
 1. **ターゲット顧客とペルソナ**: 誰が使うか
 2. **市場規模と成長性**: TAM/SAM/SOM の推定
 3. **顧客が真に求めるもの**: Jobs to be Done
 4. **競合製品との差別化ポイント**
 5. **Go-to-Market 戦略の提案**
 
-分析後、製品設計の初期提案をまとめてください。
-これが他の専門家との議論の出発点になります。
-""",
+分析後、製品設計の提案をまとめてください。これが他の専門家との議論の土台になります。
+"""
+
+
+# =====================================================
+# 専門家エージェント群
+# =====================================================
+market_expert = LlmAgent(
+    name="market_expert",
+    model=settings.default_model,
+    description="市場・顧客視点から製品設計を評価・提案する専門家",
+    instruction=_build_market_expert_instruction,
     output_key="market_proposal",
 )
 
@@ -98,7 +130,7 @@ finance_expert = LlmAgent(
 - 合意できる点
 - まだ議論が必要な点
 
-コンセンサスレベルが70%以上なら [SWARM_CONSENSUS] と記載してください。
+コンセンサスレベルが 70% 以上なら `[SWARM_CONSENSUS]` と記載してください。
 """,
     output_key="finance_proposal",
 )
@@ -133,16 +165,51 @@ consensus_builder = LlmAgent(
 ## 未解決の課題（次のステップ）
 
 ## 最終判定
-コンセンサスが十分に取れていない場合は REVISE と記載してください。
-コンセンサスが取れた場合はそのまま提案書を完成させてください。
+- 3者の合意が十分に成立している場合は必ず `[CONSENSUS_REACHED]` と記載してください。
+- 重大な対立や未解決論点が残り再議論が必要な場合は必ず `[NEEDS_ANOTHER_ROUND]` と記載してください。
 """,
-    output_key="market_proposal",  # 次のループサイクルへのフィードバック
+    output_key="consensus_document",
 )
 
+
 # =====================================================
-# Swarm: Workflow による条件付きサイクル
-#   market → engineer → finance → consensus_builder
-#   consensus_builder が REVISE を返したら market_expert に戻る
+# 決定論的コンセンサスルーター（@node）
+# =====================================================
+@node(name="consensus_router")
+def consensus_router(ctx: Context, node_input: Any) -> Event:
+    """合意判定タグと最大ラウンド数（`MAX_ROUNDS`）を検査し、再議論または合意完了へ分岐する。"""
+    round_num = int(ctx.state.get("swarm_round", 0)) + 1
+    doc = _extract_text(node_input) or str(ctx.state.get("consensus_document", ""))
+    upper = doc.upper()
+
+    consensus_reached = "[CONSENSUS_REACHED]" in upper
+    needs_more = (
+        "[NEEDS_ANOTHER_ROUND]" in upper
+        or "REVISE" in upper
+        or "NEXT_ROUND" in upper
+    ) and not consensus_reached
+
+    if needs_more and round_num < MAX_ROUNDS:
+        return Event(
+            output=doc,
+            route="REVISE",
+            state={"swarm_round": round_num, "consensus_document": doc},
+        )
+    return Event(
+        output=doc,
+        route="CONSENSUS",
+        state={"swarm_round": round_num, "consensus_document": doc},
+    )
+
+
+@node(name="finalize_consensus")
+def finalize_consensus(ctx: Context, node_input: Any) -> str:
+    """最終合意ドキュメントをワークフロー出力として返す。"""
+    return str(ctx.state.get("consensus_document") or _extract_text(node_input))
+
+
+# =====================================================
+# Swarm: Workflow による条件付きサイクル + ラウンド上限ガード
 # =====================================================
 root_agent = Workflow(
     name="product_design_swarm",
@@ -154,7 +221,8 @@ root_agent = Workflow(
             engineer_expert,
             finance_expert,
             consensus_builder,
-            {"REVISE": market_expert},
+            consensus_router,
+            {"REVISE": market_expert, "CONSENSUS": finalize_consensus},
         ),
     ],
 )

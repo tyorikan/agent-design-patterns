@@ -31,6 +31,8 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event
 from google.genai import types
 
+from shared.config import get_settings
+
 from .tools import (
     DEFAULT_OUTPUT_DIR,
     run_evaluator_agent,
@@ -40,7 +42,8 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-MAX_ITERATIONS = 5
+MAX_ITERATIONS = get_settings().max_loop_iterations
+_INITIAL_MAX_ITERATIONS = MAX_ITERATIONS
 
 
 class _StateProxy:
@@ -413,10 +416,15 @@ class PGEOrchestrator(BaseAgent):
 
         # ループ前のファイルスナップショット
         before_snapshot = _snapshot_dir(output_dir)
+        max_iterations = (
+            MAX_ITERATIONS
+            if MAX_ITERATIONS != _INITIAL_MAX_ITERATIONS
+            else get_settings().max_loop_iterations
+        )
 
-        for iteration in range(1, MAX_ITERATIONS + 1):
+        for iteration in range(1, max_iterations + 1):
             logger.info(
-                "PGE Orchestrator: Iteration %d/%d", iteration, MAX_ITERATIONS
+                "PGE Orchestrator: Iteration %d/%d", iteration, max_iterations
             )
 
             # --- Planner ---
@@ -535,7 +543,7 @@ class PGEOrchestrator(BaseAgent):
 
         # 最大反復到達
         logger.warning(
-            "PGE Orchestrator: Max iterations (%d) reached", MAX_ITERATIONS
+            "PGE Orchestrator: Max iterations (%d) reached", max_iterations
         )
         file_summary = _build_file_summary(
             output_dir, before_snapshot, user_request
@@ -547,7 +555,7 @@ class PGEOrchestrator(BaseAgent):
                 parts=[
                     types.Part(
                         text=(
-                            f"最大反復回数 ({MAX_ITERATIONS}) に到達しました。最終結果を返します。"
+                            f"最大反復回数 ({max_iterations}) に到達しました。最終結果を返します。"
                             f"\n{file_summary}"
                         )
                     )

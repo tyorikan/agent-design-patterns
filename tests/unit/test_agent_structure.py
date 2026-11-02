@@ -1,14 +1,14 @@
-"""Lv.1 ユニットテスト: 全12パターンのエージェント構成を決定的に検証。
+"""Lv.1 ユニットテスト: 全13パターンのエージェント構成を決定的に検証。
 
 LLM を呼び出さない。エージェントの名前、型、Workflow の edges 構造、
-output_key の設定を検証する。ミリ秒で完了する。
+JoinNode バリア同期、@node ルーター、output_key の設定を検証する。ミリ秒で完了する。
 
 ADK v2: SequentialAgent/ParallelAgent/LoopAgent → Workflow に移行済み。
 """
 
 
 from google.adk.agents import LlmAgent
-from google.adk.workflow import Workflow
+from google.adk.workflow import JoinNode, Workflow
 
 from conftest import load_pattern_agent
 
@@ -109,8 +109,16 @@ class TestParallelStructure:
     def test_researchers_have_unique_output_keys(self):
         """各リサーチャーは固有の output_key を持つ。"""
         nodes = [n for n in self.mod.root_agent.graph.nodes if isinstance(n, LlmAgent)]
-        researcher_keys = [n.output_key for n in nodes if n.output_key and n.name != "news_synthesizer"]
+        researcher_keys = [n.output_key for n in nodes if n.output_key and n.name != "synthesizer"]
         assert len(researcher_keys) == len(set(researcher_keys)), f"output_key が重複: {researcher_keys}"
+
+    def test_graph_has_join_node_before_synthesizer(self):
+        """並列リサーチャーと synthesizer の間に JoinNode バリア同期がある。"""
+        join_nodes = [n for n in self.mod.root_agent.graph.nodes if isinstance(n, JoinNode)]
+        assert len(join_nodes) == 1
+        assert join_nodes[0].name == "join_research"
+        edges = [(e.from_node.name, e.to_node.name) for e in self.mod.root_agent.graph.edges]
+        assert ("join_research", "synthesizer") in edges
 
 
 # =====================================================
@@ -135,6 +143,8 @@ class TestLoopStructure:
         node_names = [n.name for n in self.mod.root_agent.graph.nodes]
         assert "code_generator" in node_names
         assert "code_tester" in node_names
+        assert "loop_router" in node_names
+        assert "finalize_code" in node_names
 
 
 # =====================================================
@@ -267,9 +277,13 @@ class TestHumanInTheLoopStructure:
         assert self.mod.content_creator.output_key == "generated_content"
 
     def test_compliance_checker_exists(self):
-        """compliance_checker が定義されている。"""
+        """compliance_checker・ルーター・人間承認ゲート・Resumable App が定義されている。"""
         assert hasattr(self.mod, "compliance_checker")
         assert self.mod.compliance_checker.name == "compliance_checker"
+        node_names = {n.name for n in self.mod.root_agent.graph.nodes}
+        assert {"compliance_router", "human_review_gate", "rejection_notifier"}.issubset(node_names)
+        assert self.mod.app.resumability_config is not None
+        assert self.mod.app.resumability_config.is_resumable is True
 
 
 # =====================================================
@@ -301,9 +315,12 @@ class TestCapstoneStructure:
         assert len(coordinator_edges) >= 3, f"fan-out エッジが3つ以上必要: {coordinator_edges}"
 
     def test_graph_has_cycle_edge(self):
-        """レポート改善の条件付きサイクルエッジがある。"""
+        """レポート改善の条件付きサイクルエッジと JoinNode バリアがある。"""
         cycle_edges = [e for e in self.mod.root_agent.graph.edges if e.route is not None]
         assert len(cycle_edges) > 0
+        node_names = {n.name for n in self.mod.root_agent.graph.nodes}
+        assert "join_enterprise_research" in node_names
+        assert "report_review_router" in node_names
 
 
 # =====================================================

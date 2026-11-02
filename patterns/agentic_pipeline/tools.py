@@ -30,8 +30,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_settings = get_settings()
-
 # デフォルト出力ディレクトリ（生成コードの書き出し先）
 DEFAULT_OUTPUT_DIR = Path(__file__).parent / "output"
 DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -339,10 +337,11 @@ async def run_evaluator_agent(
         artifact: Generator が生成したコードの情報（JSON 文字列）
     """
     # スコア履歴の取得
+    settings = get_settings()
     score_history_raw = tool_context.state.get("score_history", "[]")
     score_history: list[int] = json.loads(score_history_raw)
     iteration = len(score_history) + 1
-    max_iterations = _settings.max_loop_iterations
+    max_iterations = settings.max_loop_iterations
 
     # 動的 system_instructions 生成
     system_prompt = build_evaluator_system_prompt(
@@ -434,26 +433,26 @@ async def run_evaluator_agent(
         )
     elif (
         isinstance(result, dict)
-        and score < _settings.approval_threshold
+        and score < settings.approval_threshold
         and result.get("verdict") == "APPROVED"
     ):
         # スコアが閾値未満なのに APPROVED → REVISE に上書き
         logger.info(
             "Evaluator: score=%d < threshold=%d、REVISE に変更",
             score,
-            _settings.approval_threshold,
+            settings.approval_threshold,
         )
         result["verdict"] = "REVISE"
         result["reasoning"] += (
-            f" [score={score} < 閾値{_settings.approval_threshold} のため REVISE に変更]"
+            f" [score={score} < 閾値{settings.approval_threshold} のため REVISE に変更]"
         )
     elif len(score_history) >= 2 and not is_regression:
         improvement = score_history[-1] - score_history[-2]
-        if improvement < _settings.min_improvement and verdict == "REVISE":
+        if improvement < settings.min_improvement and verdict == "REVISE":
             logger.info(
                 "Evaluator: 改善停滞（改善幅 %d < 閾値 %d）、APPROVED に変更",
                 improvement,
-                _settings.min_improvement,
+                settings.min_improvement,
             )
             if isinstance(result, dict):
                 result["verdict"] = "APPROVED"

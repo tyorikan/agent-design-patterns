@@ -254,6 +254,83 @@ class TestSwarm:
 
 
 # ============================================================
+# Lv.11 Human-in-the-Loop Pattern（RequestInput 一時停止・再開検証）
+# ============================================================
+class TestHumanInTheLoop:
+    @pytest.mark.asyncio
+    async def test_approval_workflow_runs_and_resumes_if_interrupted(self):
+        """コンプライアンス審査を実行し、人間承認要求が出た場合は APPROVE 応答で再開完了する。"""
+        from google.adk.runners import Runner
+        from google.adk.sessions import InMemorySessionService
+        from google.genai import types
+
+        mod = load_pattern_agent("p11_human_in_the_loop")
+        session_service = InMemorySessionService()
+        await session_service.create_session(
+            app_name=mod.app.name,
+            user_id="test_user",
+            session_id="hitl_session",
+        )
+        runner = Runner(app=mod.app, session_service=session_service)
+
+        pending_interrupt = None
+        authors: list[str] = []
+        final_text = ""
+
+        async for event in runner.run_async(
+            user_id="test_user",
+            session_id="hitl_session",
+            new_message=types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(
+                        text=(
+                            "Gemini Enterprise Agent Platform を活用した業務効率化サービスの"
+                            "紹介コピーを作成してください（「工数大幅削減」という表現を含む）"
+                        )
+                    )
+                ],
+            ),
+        ):
+            if event.author and event.author not in authors:
+                authors.append(event.author)
+            for fc in event.get_function_calls():
+                if fc.name == "adk_request_input":
+                    pending_interrupt = fc
+            if event.content and event.content.parts:
+                final_text += "".join(p.text for p in event.content.parts if p.text)
+
+        assert "content_creator" in authors
+        assert "compliance_checker" in authors
+
+        if pending_interrupt is not None:
+            resume_msg = types.Content(
+                role="user",
+                parts=[
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            id=pending_interrupt.id,
+                            name=pending_interrupt.name,
+                            response={"result": "APPROVE: 注意書き付きで公開承認"},
+                        )
+                    )
+                ],
+            )
+            async for event in runner.run_async(
+                user_id="test_user",
+                session_id="hitl_session",
+                new_message=resume_msg,
+            ):
+                if event.author and event.author not in authors:
+                    authors.append(event.author)
+                if event.content and event.content.parts:
+                    final_text += "".join(p.text for p in event.content.parts if p.text)
+
+        assert "final_publisher" in authors
+        assert len(final_text) > 100
+
+
+# ============================================================
 # Capstone（トラジェクトリ検証）
 # ============================================================
 class TestCapstone:
