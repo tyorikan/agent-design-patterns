@@ -10,12 +10,15 @@ NOTE: これらは統合テストのため、Vertex AI ADC が必要。
 テスト実行時間: 各テスト 30秒〜2分（全体で約20分）
 """
 
+import json
 import os
 
 import pytest
 
 from conftest import (
+    load_cli_pattern_agent,
     load_pattern_agent,
+    load_production_pattern_agent,
     run_agent_final_response,
     run_agent_trajectory,
 )
@@ -392,3 +395,137 @@ class TestAgenticPipeline:
             assert len(content) > 10, (
                 f"生成ファイル {f.name} の内容が空です"
             )
+
+
+# ============================================================
+# Track 2: Agents CLI Lifecycle Patterns（CLI-01 〜 CLI-04）
+# ============================================================
+class TestAgentsCliPatternsIntegration:
+    """`agents_cli_patterns` の各 ADK `App` が実モデルでツールを呼び出して応答することを検証する。"""
+
+    @pytest.mark.asyncio
+    async def test_cli01_spec_driven_sre_agent(self):
+        mod = load_cli_pattern_agent("cli01_spec_driven_agent")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "30日間で目標可用性 99.9%、実測エラー率 0.05% のエラーバジェット残量を計算してください。",
+        )
+        assert len(response) > 20
+
+    @pytest.mark.asyncio
+    async def test_cli02_evaluation_gate_finops_agent(self):
+        mod = load_cli_pattern_agent("cli02_evaluation_gate")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "payments-prod の費用スパイクを分析してください。",
+        )
+        assert len(response) > 20
+
+    @pytest.mark.asyncio
+    async def test_cli03_a2a_security_advisor(self):
+        mod = load_cli_pattern_agent("cli03_a2a_interoperability")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "roles/owner の最小権限リスクを診断してください。",
+        )
+        assert len(response) > 20
+
+    @pytest.mark.asyncio
+    async def test_cli04_grounded_rag_agent(self):
+        mod = load_cli_pattern_agent("cli04_grounded_rag_deploy")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "ディザスタリカバリの目標 RTO / RPO ポリシーを検索して引用付きで教えてください。",
+        )
+        assert len(response) > 20
+
+
+# ============================================================
+# Track 3: Production Design Patterns（PROD-01 〜 PROD-06）
+# ============================================================
+class TestProductionPatternsIntegration:
+    """`production_patterns` の各パターンが実モデル上で契約・ガードレール・予算制御と共に完走することを検証する。"""
+
+    @pytest.mark.asyncio
+    async def test_prod01_contract_based_execution(self):
+        mod = load_production_pattern_agent("prod01_contract_based_execution")
+        ticket = json.dumps(
+            {
+                "ticket_id": "CHG-2001",
+                "service_name": "checkout-api",
+                "requested_replicas": 60,
+                "environment": "prod",
+            }
+        )
+        response, trajectory = await run_agent_trajectory(
+            mod.root_agent, "prod01_contract_based_execution", ticket
+        )
+        assert "VERIFIED_READY" in response or "HALTED_FOR_HUMAN" in response
+        assert "precondition_gate" in trajectory
+
+    @pytest.mark.asyncio
+    async def test_prod02_idempotent_low_value_credit(self):
+        mod = load_production_pattern_agent("prod02_idempotent_approval_gate")
+        response = await run_agent_final_response(
+            mod.credit_app,
+            mod.credit_app.name,
+            "注文 ORD-3001 に対して配送遅延のお詫びとして 20 USD のクレジットを発行してください。",
+            initial_state={"auth:tenant_id": "tenant-alpha"},
+        )
+        assert len(response) > 10
+
+    @pytest.mark.asyncio
+    async def test_prod03_guardrails_context_isolation(self):
+        mod = load_production_pattern_agent("prod03_guardrails_context_isolation")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "未払い（open）の請求書一覧を確認してください。",
+            initial_state={"auth:tenant_id": "tenant-alpha"},
+        )
+        assert len(response) > 10
+        assert "alice.billing@alpha.example.com" not in response
+
+    @pytest.mark.asyncio
+    async def test_prod04_model_cascade(self):
+        mod = load_production_pattern_agent("prod04_model_cascade")
+        response, trajectory = await run_agent_trajectory(
+            mod.root_agent,
+            "prod04_model_cascade",
+            "HTTP 429 エラーに対する指数バックオフとジッターの実装手順を簡潔に教えてください。",
+        )
+        assert len(response) > 40
+        assert "fast_drafter_agent" in trajectory
+
+    @pytest.mark.asyncio
+    async def test_prod05_outcome_state_evaluation_agent(self):
+        mod = load_production_pattern_agent("prod05_outcome_state_evaluation")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "注文 ORD-100 の配送先を郵便番号 150-0002、市区町村 Shibuya に変更してください。",
+            initial_state={
+                "orders_db": {
+                    "ORD-100": {
+                        "shipment_status": "unshipped",
+                        "postal_code": "100-0001",
+                        "city": "Chiyoda",
+                    }
+                }
+            },
+        )
+        assert len(response) > 10
+
+    @pytest.mark.asyncio
+    async def test_prod06_context_compaction_budget(self):
+        mod = load_production_pattern_agent("prod06_context_compaction_budget")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "checkout-api のログを取得し、発生しているエラー原因を特定してください。",
+        )
+        assert len(response) > 20
