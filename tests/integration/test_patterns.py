@@ -277,54 +277,57 @@ class TestHumanInTheLoop:
         authors: list[str] = []
         final_text = ""
 
-        async for event in runner.run_async(
-            user_id="test_user",
-            session_id="hitl_session",
-            new_message=types.Content(
-                role="user",
-                parts=[
-                    types.Part.from_text(
-                        text=(
-                            "Gemini Enterprise Agent Platform を活用した業務効率化サービスの"
-                            "紹介コピーを作成してください（「工数大幅削減」という表現を含む）"
-                        )
-                    )
-                ],
-            ),
-        ):
-            if event.author and event.author not in authors:
-                authors.append(event.author)
-            for fc in event.get_function_calls():
-                if fc.name == "adk_request_input":
-                    pending_interrupt = fc
-            if event.content and event.content.parts:
-                final_text += "".join(p.text for p in event.content.parts if p.text)
-
-        assert "content_creator" in authors
-        assert "compliance_checker" in authors
-
-        if pending_interrupt is not None:
-            resume_msg = types.Content(
-                role="user",
-                parts=[
-                    types.Part(
-                        function_response=types.FunctionResponse(
-                            id=pending_interrupt.id,
-                            name=pending_interrupt.name,
-                            response={"result": "APPROVE: 注意書き付きで公開承認"},
-                        )
-                    )
-                ],
-            )
+        try:
             async for event in runner.run_async(
                 user_id="test_user",
                 session_id="hitl_session",
-                new_message=resume_msg,
+                new_message=types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(
+                            text=(
+                                "Gemini Enterprise Agent Platform を活用した業務効率化サービスの"
+                                "紹介コピーを作成してください（「工数大幅削減」という表現を含む）"
+                            )
+                        )
+                    ],
+                ),
             ):
                 if event.author and event.author not in authors:
                     authors.append(event.author)
+                for fc in event.get_function_calls():
+                    if fc.name == "adk_request_input":
+                        pending_interrupt = fc
                 if event.content and event.content.parts:
                     final_text += "".join(p.text for p in event.content.parts if p.text)
+
+            assert "content_creator" in authors
+            assert "compliance_checker" in authors
+
+            if pending_interrupt is not None:
+                resume_msg = types.Content(
+                    role="user",
+                    parts=[
+                        types.Part(
+                            function_response=types.FunctionResponse(
+                                id=pending_interrupt.id,
+                                name=pending_interrupt.name,
+                                response={"result": "APPROVE: 注意書き付きで公開承認"},
+                            )
+                        )
+                    ],
+                )
+                async for event in runner.run_async(
+                    user_id="test_user",
+                    session_id="hitl_session",
+                    new_message=resume_msg,
+                ):
+                    if event.author and event.author not in authors:
+                        authors.append(event.author)
+                    if event.content and event.content.parts:
+                        final_text += "".join(p.text for p in event.content.parts if p.text)
+        finally:
+            await runner.close()
 
         assert "final_publisher" in authors
         assert len(final_text) > 100
@@ -354,12 +357,14 @@ class TestCapstone:
 # ============================================================
 # Agentic Pipeline（Antigravity Agent 統合テスト）
 # ============================================================
-_has_gemini_api_key = bool(os.environ.get("GEMINI_API_KEY"))
+_has_antigravity_auth = bool(
+    os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+)
 
 
 @pytest.mark.skipif(
-    not _has_gemini_api_key,
-    reason="GEMINI_API_KEY が未設定（Antigravity local harness に必須）",
+    not _has_antigravity_auth,
+    reason="GEMINI_API_KEY または GOOGLE_CLOUD_PROJECT が未設定",
 )
 class TestAgenticPipeline:
     """汎用 PGE コード実装パイプラインの統合テスト。
@@ -377,7 +382,7 @@ class TestAgenticPipeline:
 
     @pytest.fixture(autouse=True)
     def clean_output_dir(self):
-        """テスト前に output ディレクトリをクリーンアップする。"""
+        """テスト前後に output ディレクトリをクリーンアップする。"""
         import shutil
 
         from patterns.agentic_pipeline.tools import OUTPUT_DIR
@@ -386,7 +391,8 @@ class TestAgenticPipeline:
             shutil.rmtree(OUTPUT_DIR)
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         yield
-        # テスト後はクリーンアップしない（デバッグ用に残す）
+        if OUTPUT_DIR.exists():
+            shutil.rmtree(OUTPUT_DIR)
 
     @pytest.mark.asyncio
     async def test_pge_loop_with_abstract_business_request(self):
@@ -548,8 +554,8 @@ class TestProductionPatternsIntegration:
     async def test_prod02_idempotent_low_value_credit(self):
         mod = load_production_pattern_agent("prod02_idempotent_approval_gate")
         response = await run_agent_final_response(
-            mod.credit_app,
-            mod.credit_app.name,
+            mod.app,
+            mod.app.name,
             "注文 ORD-3001 に対して配送遅延のお詫びとして 20 USD のクレジットを発行してください。",
             initial_state={"auth:tenant_id": "tenant-alpha"},
         )

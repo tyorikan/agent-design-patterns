@@ -128,15 +128,18 @@ async def run_agent_final_response(
     runner = _create_runner(agent, effective_app_name, session_service, artifact_service)
 
     response_text = ""
-    async for event in runner.run_async(
-        user_id="test_user",
-        session_id="test_session",
-        new_message=types.Content(role="user", parts=[types.Part(text=query)]),
-    ):
-        if event.is_final_response() and event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    response_text += part.text
+    try:
+        async for event in runner.run_async(
+            user_id="test_user",
+            session_id="test_session",
+            new_message=types.Content(role="user", parts=[types.Part(text=query)]),
+        ):
+            if event.is_final_response() and event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text and not getattr(part, "thought", False):
+                        response_text += part.text
+    finally:
+        await runner.close()
     return response_text
 
 
@@ -178,17 +181,30 @@ async def run_agent_trajectory(
 
     response_text = ""
     trajectory: list[str] = []
-    async for event in runner.run_async(
-        user_id="test_user",
-        session_id="test_session",
-        new_message=types.Content(role="user", parts=[types.Part(text=query)]),
-    ):
-        if event.author and event.author not in trajectory:
-            trajectory.append(event.author)
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    response_text += part.text
-        if event.output is not None:
-            response_text += "\n" + json.dumps(event.output, ensure_ascii=False, default=str)
+    try:
+        async for event in runner.run_async(
+            user_id="test_user",
+            session_id="test_session",
+            new_message=types.Content(role="user", parts=[types.Part(text=query)]),
+        ):
+            if event.node_info and event.node_info.path:
+                parts = [seg.split("@")[0] for seg in event.node_info.path.split("/") if seg]
+                root_name = parts[0] if len(parts) > 1 else ""
+                leaf_name = parts[-1] if parts else ""
+                if leaf_name and leaf_name not in trajectory:
+                    trajectory.append(leaf_name)
+                if event.author and event.author != root_name and event.author not in trajectory:
+                    trajectory.append(event.author)
+            elif event.author and event.author not in trajectory:
+                trajectory.append(event.author)
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text and not getattr(part, "thought", False):
+                        response_text += part.text
+            if event.output is not None:
+                response_text += "\n" + json.dumps(
+                    event.output, ensure_ascii=False, default=str
+                )
+    finally:
+        await runner.close()
     return response_text, trajectory

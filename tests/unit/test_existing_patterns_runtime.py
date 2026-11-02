@@ -786,6 +786,72 @@ class TestAgenticPipelineRuntime:
         assert "APPROVED" in text
         assert "app.py" in text
 
+    @pytest.mark.asyncio
+    async def test_pge_orchestrator_renders_cumulative_token_usage(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        from google.antigravity import types as agy_types
+
+        from patterns.agentic_pipeline.tools import _record_usage_entry
+
+        mod = load_pattern_agent("agentic_pipeline")
+
+        async def _fake_planner(user_request: str, tool_context: Any) -> str:
+            _record_usage_entry(
+                tool_context,
+                "planner",
+                agy_types.UsageMetadata(
+                    prompt_token_count=400,
+                    candidates_token_count=150,
+                    thoughts_token_count=50,
+                    total_token_count=600,
+                ),
+                agy_types.StopReason.UNSPECIFIED,
+            )
+            return '{"architecture": "clean", "modules": ["app.py"], "test_strategy": "pytest", "directory_structure": "app.py"}'
+
+        async def _fake_generator(plan: str, tool_context: Any) -> str:
+            _record_usage_entry(
+                tool_context,
+                "generator",
+                agy_types.UsageMetadata(
+                    prompt_token_count=1000,
+                    candidates_token_count=500,
+                    thoughts_token_count=200,
+                    total_token_count=1700,
+                ),
+                agy_types.StopReason.UNSPECIFIED,
+            )
+            (tmp_path / "app.py").write_text("def hello() -> str:\n    return 'ok'\n")
+            return '{"files_created": ["app.py"], "summary": "implemented"}'
+
+        async def _fake_evaluator(plan: str, artifact: str, tool_context: Any) -> str:
+            _record_usage_entry(
+                tool_context,
+                "evaluator",
+                agy_types.UsageMetadata(
+                    prompt_token_count=800,
+                    candidates_token_count=200,
+                    thoughts_token_count=100,
+                    total_token_count=1100,
+                ),
+                agy_types.StopReason.UNSPECIFIED,
+            )
+            return "APPROVED: score=95. テストと lint が合格"
+
+        monkeypatch.setattr(mod, "run_planner_agent", _fake_planner)
+        monkeypatch.setattr(mod, "run_generator_agent", _fake_generator)
+        monkeypatch.setattr(mod, "run_evaluator_agent", _fake_evaluator)
+
+        text, _ = await run_agent_trajectory(
+            mod.root_agent,
+            "agentic_pipeline",
+            "挨拶モジュールを作成してください",
+            initial_state={"output_dir": str(tmp_path)},
+        )
+        assert "トークン使用量サマリー" in text
+        assert "3,400" in text
+
 
 # =============================================================================
 # Shared Demo Runner & All 13 `demo.py` Modules Smoke Test

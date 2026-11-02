@@ -1,33 +1,38 @@
-"""Agentic Pipeline パターン — ADK BaseAgent + Antigravity Agent。
+"""Agentic Pipeline パターン — ADK BaseAgent + Antigravity Agent（ADK 2.13 / Antigravity 0.1.23+）。
 
 ADK Workflow の条件付きエッジは ADK v2 に実装されているが、
-PGE パイプラインの複雑なループ制御（スコア履歴管理、リグレッションガード等）
-には不十分だったため、BaseAgent を採用している。
+PGE パイプラインの複雑なループ制御（スコア履歴管理、リグレッションガード、改善停滞判定等）
+を柔軟に扱うため、BaseAgent を採用している。
 
-各ノードの内部処理は Antigravity Agent（自律エージェント）に委任する。
+各フェーズの内部処理は最新 Antigravity SDK（`LocalAgentConfig` + 9段階 Policy + `RunCommandConfig` +
+フェーズ別 `BudgetConfig` + `total_usage` 計測）で動作する自律エージェントに委任する。
 
-認証: Vertex AI ADC のみ使用。
+認証: `GEMINI_API_KEY`（Gemini Developer API）または Vertex AI ADC（`project` / `location`）に対応。
 
 アーキテクチャ:
     PGEOrchestrator (BaseAgent)
-        ├── run_planner_agent() → Antigravity Agent
-        ├── run_generator_agent() → Antigravity Agent
-        └── run_evaluator_agent() → Antigravity Agent
+        ├── run_planner_agent() → Antigravity Agent (読み取り専用)
+        ├── run_generator_agent() → Antigravity Agent (ファイル作成・自己テスト)
+        └── run_evaluator_agent() → Antigravity Agent (書き込み無効・実機検証)
         └── ループ制御: REVISE → Planner に戻る
 
 REVISE 条件:
     - score < 80 かつ改善可能 → REVISE（Planner に戻る）
-    - score >= 80 → APPROVED
+    - CRITICAL / HIGH 課題が残存 → 強制 REVISE
+    - score >= 80 かつブロッカーなし → APPROVED
     - 最大反復到達 → 強制 APPROVED
     - 改善停滞（前回比 < 5点） → APPROVED
 """
 
 import json
 import logging
+from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
+from google.adk.apps import App
 from google.adk.events import Event
 from google.genai import types
 
@@ -49,7 +54,7 @@ _INITIAL_MAX_ITERATIONS = MAX_ITERATIONS
 class _StateProxy:
     """ToolContext の最小限の代替。state 辞書へのアクセスを提供する。"""
 
-    def __init__(self, state: dict):
+    def __init__(self, state: dict[str, Any]) -> None:
         self.state = state
 
 
@@ -61,7 +66,7 @@ def _snapshot_dir(directory: Path) -> dict[str, tuple[float, int]]:
     Returns:
         {相対パス: (mtime, size)} の辞書
     """
-    snapshot = {}
+    snapshot: dict[str, tuple[float, int]] = {}
     if not directory.exists():
         return snapshot
     for f in directory.rglob("*"):
@@ -365,6 +370,30 @@ def _summarize_artifact(artifact_json: str) -> str:
     return "\n".join(sections)
 
 
+def _build_usage_summary(local_state: dict[str, Any]) -> str:
+    """`usage_history` が存在する場合、Antigravity セッションの累積トークン使用量を整形する。"""
+    raw = local_state.get("usage_history", "[]")
+    try:
+        entries = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return ""
+    if not isinstance(entries, list) or not entries:
+        return ""
+
+    prompt_total = sum(int(e.get("prompt_tokens", 0)) for e in entries if isinstance(e, dict))
+    cand_total = sum(int(e.get("candidates_tokens", 0)) for e in entries if isinstance(e, dict))
+    thought_total = sum(int(e.get("thoughts_tokens", 0)) for e in entries if isinstance(e, dict))
+    grand_total = sum(int(e.get("total_tokens", 0)) for e in entries if isinstance(e, dict))
+    if grand_total == 0 and prompt_total == 0:
+        return ""
+
+    return (
+        f"\n\n### 📊 トークン使用量サマリー（{len(entries)} sessions）\n\n"
+        f"- **合計トークン:** {grand_total:,} "
+        f"(Prompt: {prompt_total:,} / Candidates: {cand_total:,} / Thoughts: {thought_total:,})"
+    )
+
+
 class PGEOrchestrator(BaseAgent):
     """Planner-Generator-Evaluator 3者間自律ループオーケストレーター。
 
@@ -379,14 +408,16 @@ class PGEOrchestrator(BaseAgent):
         5. verdict == APPROVED → 終了
     """
 
-    async def _run_async_impl(self, ctx: InvocationContext):
+    async def _run_async_impl(
+        self, ctx: InvocationContext
+    ) -> AsyncGenerator[Event, None]:
         """PGE ループを制御する。"""
         session_state = ctx.session.state
 
         # PGE ループ内の中間データはローカル dict で管理する。
         # session state に直接書き込むと SQLite の update_time が進み、
         # 次の Event yield 時に stale session エラーが発生するため。
-        local_state: dict = {}
+        local_state: dict[str, Any] = {}
         # session state から初期値をコピー（output_dir 等）
         for key in ("output_dir",):
             if key in session_state:
@@ -511,6 +542,7 @@ class PGEOrchestrator(BaseAgent):
                 file_summary = _build_file_summary(
                     output_dir, before_snapshot, user_request
                 )
+                usage_summary = _build_usage_summary(local_state)
                 yield Event(
                     author=self.name,
                     content=types.Content(
@@ -520,7 +552,7 @@ class PGEOrchestrator(BaseAgent):
                                 text=(
                                     f"### [Iteration {iteration}] ✅ APPROVED\n\n"
                                     f"{result_text}\n\n"
-                                    f"---\n\n{file_summary}"
+                                    f"---\n\n{file_summary}{usage_summary}"
                                 )
                             )
                         ],
@@ -548,6 +580,7 @@ class PGEOrchestrator(BaseAgent):
         file_summary = _build_file_summary(
             output_dir, before_snapshot, user_request
         )
+        usage_summary = _build_usage_summary(local_state)
         yield Event(
             author=self.name,
             content=types.Content(
@@ -556,7 +589,7 @@ class PGEOrchestrator(BaseAgent):
                     types.Part(
                         text=(
                             f"最大反復回数 ({max_iterations}) に到達しました。最終結果を返します。"
-                            f"\n{file_summary}"
+                            f"\n{file_summary}{usage_summary}"
                         )
                     )
                 ],
@@ -571,4 +604,9 @@ root_agent = PGEOrchestrator(
         "Antigravity Agent を頭脳とした Planner-Generator-Evaluator "
         "3者間自律レビューパイプライン。"
     ),
+)
+
+app = App(
+    name="agentic_pipeline",
+    root_agent=root_agent,
 )
