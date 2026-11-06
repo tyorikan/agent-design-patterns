@@ -119,7 +119,7 @@ flowchart LR
 | **PROD-02** | **Idempotent Tool & Approval Gate** | [`production_patterns/prod02_idempotent_approval_gate/`](production_patterns/prod02_idempotent_approval_gate/) | リトライ・再開時の二重決済、高額操作の無承認実行 | `require_confirmation`、`ResumabilityConfig`、SHA-256 冪等性台帳 |
 | **PROD-03** | **Guardrails & Context Isolation** | [`production_patterns/prod03_guardrails_context_isolation/`](production_patterns/prod03_guardrails_context_isolation/) | テナント横断漏洩、ツール出力経由の間接プロンプトインジェクション | `BasePlugin` 4 フック、`auth:tenant_id` 強制、外部送信ホワイトリスト |
 | **PROD-04** | **Model Cascade** | [`production_patterns/prod04_model_cascade/`](production_patterns/prod04_model_cascade/) | 全件上位モデル利用の高コスト・高遅延、審査器の採点誤差 | 決定論的 Pre-Gate、Fail-Closed 二値審査、Rogan–Gladen 補正 |
-| **PROD-05** | **Outcome State Evaluation** | [`production_patterns/prod05_outcome_state_evaluation/`](production_patterns/prod05_outcome_state_evaluation/) | 口頭のみの完了報告（DB 未更新）、`Pass@k` による信頼性過信 | 最終環境状態検証（$S_{\text{final}} == S_{\text{gold}}$）、無偏 `pass^k` |
+| **PROD-05** | **Outcome State Evaluation** | [`production_patterns/prod05_outcome_state_evaluation/`](production_patterns/prod05_outcome_state_evaluation/) | 口頭のみの完了報告（DB 未更新）、`Pass@k` による信頼性過信 | 最終環境状態検証 ($S_{\text{final}} == S_{\text{gold}}$)、無偏 `pass^k` |
 | **PROD-06** | **Context Compaction & Budget Guard** | [`production_patterns/prod06_context_compaction_budget/`](production_patterns/prod06_context_compaction_budget/) | 大容量ツール出力による $O(D^2)$ トークン膨張、推論費の上限超過 | `ArtifactService` 自動退避、`EventsCompactionConfig`、同期予算遮断器 |
 
 ---

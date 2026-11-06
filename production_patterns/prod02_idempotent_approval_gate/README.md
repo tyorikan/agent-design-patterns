@@ -58,7 +58,9 @@ sequenceDiagram
 
 冪等キーに毎回ランダムな `UUIDv4` を生成してしまうと、リトライのたびに別のキーとみなされ重複排除が機能しません。必ず「テナント ID」「操作種別」「業務上の一意キー（注文番号など）」から決定論的なハッシュ値を算出します。
 
-$$\text{IdempotencyKey} = \text{SHA256}(\text{tenant\_id} \parallel \text{":"} \parallel \text{operation} \parallel \text{":"} \parallel \text{business\_key})$$
+```math
+\text{IdempotencyKey} = \text{SHA256}(\text{tenant\_id} \parallel \text{":"} \parallel \text{operation} \parallel \text{":"} \parallel \text{business\_key})
+```
 
 さらに、同一の `IdempotencyKey` に対して**前回と異なる金額やパラメータ**（例: 初回 `\$45` だった注文番号に対し `\$450`）で再送された場合は、キャッシュ結果をそのまま返すと引数不整合が隠蔽されるため、引数全体の SHA-256 ハッシュ `payload_hash` を照合して `CONFLICT (IDEMPOTENCY_PAYLOAD_MISMATCH)` を返します。
 

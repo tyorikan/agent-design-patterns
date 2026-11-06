@@ -50,27 +50,35 @@ flowchart LR
 ### 1. Rogan–Gladen 推定量による審査バイアスの補正（基礎からの導出）
 
 審査モデル（Judge）も確率モデルであり、100% 正確ではありません。人間がラベル付けした検証データで審査モデルを事前にテストすると、次の 2 つの指標が測定できます。
-- **感度（Sensitivity）$q_1$**: 本当に正しい回答を、審査モデルが正しく合格（PASS）と判定できる確率
-- **特異度（Specificity）$q_0$**: 本当は不十分な回答を、審査モデルが正しく不合格（FAIL）と見抜ける確率
+- **感度（Sensitivity）** $q_1$: 本当に正しい回答を、審査モデルが正しく合格（PASS）と判定できる確率
+- **特異度（Specificity）** $q_0$: 本当は不十分な回答を、審査モデルが正しく不合格（FAIL）と見抜ける確率
 
-本番トラフィックにおける**真の合格率を $\theta$** とすると、審査モデルが合格を出す観測割合 $p_{\text{obs}}$ は「真に正しい回答を見抜いた割合」と「不十分な回答を見逃した偽陽性（$1 - q_0$）」の和になります。
+本番トラフィックにおける **真の合格率** を $\theta$ とすると、審査モデルが合格を出す観測割合 $p_{\text{obs}}$ は「真に正しい回答を見抜いた割合」と「不十分な回答を見逃した偽陽性 ($1 - q_0$)」の和になります。
 
-$$p_{\text{obs}} = \theta \cdot q_1 + (1 - \theta)(1 - q_0)$$
+$$
+p_{\text{obs}} = \theta \cdot q_1 + (1 - \theta)(1 - q_0)
+$$
 
-この一次方程式を $\theta$ について解くと、採点誤差を取り除いた**真の合格率の推定値 $\hat{\theta}$（Rogan–Gladen 推定量）**が得られます。
+この一次方程式を $\theta$ について解くと、採点誤差を取り除いた **真の合格率の推定値** $\hat{\theta}$（Rogan–Gladen 推定量）が得られます。
 
-$$\hat{\theta} = \operatorname{clip}_{[0, 1]}\!\left(\frac{p_{\text{obs}} + q_0 - 1}{q_1 + q_0 - 1}\right)$$
+$$
+\hat{\theta} = \mathrm{clip}_{[0, 1]}\left(\frac{p_{\text{obs}} + q_0 - 1}{q_1 + q_0 - 1}\right)
+$$
 
 > [!IMPORTANT]
-> 分母の $J = q_1 + q_0 - 1$ は **Youden の J 統計量** と呼ばれます。$q_1 + q_0 \le 1$ の審査器はランダム当て推量以下の識別力しか持たないため、`rogan_gladen_estimate` は `ValueError` を送出して誤用を防止します。
+> 分母の $J = q_1 + q_0 - 1$ は **Youden の J 統計量** と呼ばれます。 $q_1 + q_0 \le 1$ の審査器はランダム当て推量以下の識別力しか持たないため、`rogan_gladen_estimate` は `ValueError` を送出して誤用を防止します。
 
 ### 2. 解決 1 件あたり実効コスト（Effective Cost per Solved Task）
 
 見かけの平均 API 単価が下がっても、未解決のまま顧客へ返却される割合が増えれば再問い合わせで総コストは悪化します。`evaluate_cascade_economics` では、Pre-Gate 通過率 $r_{\text{pre}}$ と審査誤差を踏まえた「真に解決された 1 件あたりの実効コスト」を計算します。
 
-$$E[\text{Cost}] = C_{\text{fast}} + r_{\text{pre}} \cdot C_{\text{judge}} + (1 - r_{\text{pre}} \cdot p_{\text{obs}}) \cdot C_{\text{strong}}$$
+$$
+E[\text{Cost}] = C_{\text{fast}} + r_{\text{pre}} \cdot C_{\text{judge}} + (1 - r_{\text{pre}} \cdot p_{\text{obs}}) \cdot C_{\text{strong}}
+$$
 
-$$\text{Effective Cost per Solved Task} = \frac{E[\text{Cost}]}{P(\text{Truly Solved})}$$
+$$
+\text{Effective Cost per Solved Task} = \frac{E[\text{Cost}]}{P(\text{Truly Solved})}
+$$
 
 ## トレードオフ
 

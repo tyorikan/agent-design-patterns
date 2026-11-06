@@ -49,17 +49,21 @@ flowchart LR
 
 ### 1. ステートレス対話における $O(D^2)$ 累積入力トークンの導出（`estimate_cumulative_input_tokens`）
 
-システム指示を $T_{\text{sys}}$ トークン、各ターンの発話増分を $T_{\text{turn}}$ トークン、各ターンで履歴にそのまま残るツール出力を $T_{\text{tool}}$ トークンとすると、第 $t$ ターン（$t = 1, \dots, D$）に送信される入力トークン数は $T_{\text{sys}} + t \cdot T_{\text{turn}} + (t - 1) T_{\text{tool}}$ となります。全 $D$ ターンの累積入力トークン数は次の二次式で増大します。
+システム指示を $T_{\text{sys}}$ トークン、各ターンの発話増分を $T_{\text{turn}}$ トークン、各ターンで履歴にそのまま残るツール出力を $T_{\text{tool}}$ トークンとすると、第 $t$ ターン ($t = 1, \dots, D$) に送信される入力トークン数は $T_{\text{sys}} + t \cdot T_{\text{turn}} + (t - 1) T_{\text{tool}}$ となります。全 $D$ ターンの累積入力トークン数は次の二次式で増大します。
 
-$$\text{Cumulative Input Tokens}(D) = D \cdot T_{\text{sys}} + \frac{D(D + 1)}{2} T_{\text{turn}} + \frac{D(D - 1)}{2} T_{\text{tool}}$$
+$$
+\text{Cumulative Input Tokens}(D) = D \cdot T_{\text{sys}} + \frac{D(D + 1)}{2} T_{\text{turn}} + \frac{D(D - 1)}{2} T_{\text{tool}}
+$$
 
-たとえば $D = 20$ ターン、$T_{\text{sys}} = 2{,}000$、$T_{\text{turn}} = 500$ のとき、$T_{\text{tool}} = 8{,}000$ を毎回履歴に残すと累積入力は **1,665,000 トークン** に膨れ上がりますが、`ArtifactOffloadPlugin` で要約ポインタ（$T_{\text{tool}} = 200$）へ退避すると **183,000 トークン（約 89% 削減）** に抑えられます。
+たとえば $D = 20$ ターン、 $T_{\text{sys}} = 2{,}000$、 $T_{\text{turn}} = 500$ のとき、 $T_{\text{tool}} = 8{,}000$ を毎回履歴に残すと累積入力は **1,665,000 トークン** に膨れ上がりますが、`ArtifactOffloadPlugin` で要約ポインタ ($T_{\text{tool}} = 200$) へ退避すると **183,000 トークン（約 89% 削減）** に抑えられます。
 
 ### 2. 明示的キャッシュの損益分岐呼び出し回数（`calculate_cache_break_even_calls`）
 
 明示的コンテキストキャッシュ（Explicit Caching 対応モデル）では、キャッシュ作成時の入力課金 $P_{\text{in}}$ と保持時間 $H$ 時間のストレージ課金 $H \cdot P_{\text{storage}}$ が発生する一方、各参照リクエストの入力単価が $P_{\text{cached}}$（例: 90% 割引）に下がります。キャッシュなしの $K \cdot P_{\text{in}}$ を下回る最小呼び出し回数 $K_{\min}$ は次式で求まります。
 
-$$K_{\min} = \left\lceil \frac{P_{\text{in}} + H \cdot P_{\text{storage}}}{P_{\text{in}} - P_{\text{cached}}} \right\rceil$$
+$$
+K_{\min} = \left\lceil \frac{P_{\text{in}} + H \cdot P_{\text{storage}}}{P_{\text{in}} - P_{\text{cached}}} \right\rceil
+$$
 
 （※ 暗黙的キャッシュはストレージ課金 $P_{\text{storage}} = 0$ のため、プロンプト先頭に共通のシステム指示やスキーマを固定配置するだけで追加コストなしに割引の恩恵を受けられます。）
 

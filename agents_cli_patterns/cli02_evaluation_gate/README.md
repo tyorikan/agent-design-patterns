@@ -25,7 +25,7 @@ flowchart LR
 - 過去の障害・誤回答ケースを再発防止テストとして蓄積したい場合
 
 ❌ **不向きな場合・できないこと:**
-- **単一試行（1 回実行）の評価だけでは確率的なばらつきを見抜けない**: たまたま 1 回正解しただけの不安定なエージェントを厳密に検出するには、[`prod05_outcome_state_evaluation`](../../production_patterns/prod05_outcome_state_evaluation/) の複数回反復評価（$\text{pass}^k$）を併用する必要がある
+- **単一試行（1 回実行）の評価だけでは確率的なばらつきを見抜けない**: たまたま 1 回正解しただけの不安定なエージェントを厳密に検出するには、[`prod05_outcome_state_evaluation`](../../production_patterns/prod05_outcome_state_evaluation/) の複数回反復評価 ($\mathrm{pass}^k$) を併用する必要がある
 - **LLM 審査器自体の採点誤差はゼロにならない**: LLM-as-a-Judge にも見逃し（偽陽性）や過剰減点（偽陰性）があるため、厳密な合格率推定には定期的な人間監査や [`prod04_model_cascade`](../../production_patterns/prod04_model_cascade/) で扱うバイアス補正が必要
 
 ## Review & Critique (Lv.6) との違い
