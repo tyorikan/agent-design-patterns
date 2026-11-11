@@ -294,7 +294,7 @@ def _build_config(
         config_kwargs["api_key"] = api_key
         config_kwargs["vertex"] = False
     else:
-        config_kwargs["vertex"] = settings.google_genai_use_vertexai
+        config_kwargs["vertex"] = settings.google_genai_use_enterprise
         config_kwargs["project"] = settings.google_cloud_project
         config_kwargs["location"] = settings.google_cloud_location
 

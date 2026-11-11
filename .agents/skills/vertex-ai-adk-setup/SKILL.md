@@ -87,7 +87,7 @@ uv add --dev pytest pytest-asyncio ruff mypy
 cat > .env << EOF
 GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
 GOOGLE_CLOUD_LOCATION=global
-GOOGLE_GENAI_USE_VERTEXAI=True
+GOOGLE_GENAI_USE_ENTERPRISE=True
 ADK_MAX_LLM_CALLS=500
 EOF
 ```
@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     
     google_cloud_project: str
     google_cloud_location: str = "global"
-    google_genai_use_vertexai: bool = True
+    google_genai_use_enterprise: bool = True
     
     # モデル設定
     default_model: str = "gemini-3.8-flash"
@@ -210,7 +210,7 @@ gcloud run deploy my-agent \
   --region $REGION \
   --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT_ID \
   --set-env-vars GOOGLE_CLOUD_LOCATION=$REGION \
-  --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=True \
+  --set-env-vars GOOGLE_GENAI_USE_ENTERPRISE=True \
   --allow-unauthenticated
 ```
 

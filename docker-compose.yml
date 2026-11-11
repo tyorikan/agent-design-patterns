@@ -6,7 +6,6 @@ services:
     environment:
       # Gemini Enterprise Agent Platform (Vertex AI) 認証（ADC のみ・API Key 不使用）
       - GOOGLE_GENAI_USE_ENTERPRISE=True
-      - GOOGLE_GENAI_USE_VERTEXAI=True
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
       - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-global}
       # アプリ設定
@@ -28,7 +27,6 @@ services:
     build: .
     environment:
       - GOOGLE_GENAI_USE_ENTERPRISE=True
-      - GOOGLE_GENAI_USE_VERTEXAI=True
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
       - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-global}
       - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.8-flash}

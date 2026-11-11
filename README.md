@@ -148,7 +148,7 @@ ADK 1.x から 2.x への詳細な移行手順は [`docs/v1-to-v2-migration-guid
 1. **宣言的グラフ API（`Workflow`）**: `SequentialAgent` / `ParallelAgent` / `LoopAgent` の代わりに `Workflow(edges=[...])` で直列チェーン・並列タプル・条件付きサイクルを統一記述します。
 2. **並列 Fan-in の `JoinNode` と条件分岐の `@node` ルーター**: 並列タプル `(a, b)` の直後には全ブランチの完了を同期する `JoinNode` を配置します（省略するとブランチ数だけ後続ノードが重複発火します）。また、`LlmAgent` は `route` を返さないため、条件付きサイクルの分岐判定と反復上限（`MAX_ITERATIONS`）は `Event(route=...)` を返す `@node` 関数で行います。
 3. **`Workflow` は `BaseNode` サブクラス**: `LlmAgent(sub_agents=[...])` の中には直接入れず、上位の `Workflow` エッジに組み込みます。また `Runner` 実行時は `Runner(node=workflow, ...)`（中断・再開を使う場合は `App(..., resumability_config=ResumabilityConfig(is_resumable=True))` 経由で `Runner(app=app, ...)`）を使用します。
-4. **Gemini 3.8 Flash のエンドポイント設定**: Gemini Enterprise Agent Platform 上で `gemini-3.8-flash` を利用する際は `GOOGLE_CLOUD_LOCATION=global` および `GOOGLE_GENAI_USE_ENTERPRISE=True`（互換用に `GOOGLE_GENAI_USE_VERTEXAI=True` も併用）を設定します。
+4. **Gemini 3.8 Flash のエンドポイント設定**: Gemini Enterprise Agent Platform 上で `gemini-3.8-flash` を利用する際は `GOOGLE_CLOUD_LOCATION=global` および `GOOGLE_GENAI_USE_ENTERPRISE=True` を設定します。
 
 ---
 
@@ -178,7 +178,6 @@ gcloud auth application-default login
 GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=global
 GOOGLE_GENAI_USE_ENTERPRISE=True
-GOOGLE_GENAI_USE_VERTEXAI=True
 DEFAULT_MODEL=gemini-3.8-flash
 FAST_MODEL=gemini-3.5-flash-lite
 ESCALATION_MODEL=gemini-4-argon

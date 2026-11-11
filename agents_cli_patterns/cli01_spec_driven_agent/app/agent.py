@@ -15,7 +15,6 @@ from google.genai import types
 
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "True")
-os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
 DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-3.8-flash")
 

@@ -13,7 +13,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # プロジェクトルート（shared/ の親ディレクトリ）
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     必須:
         GOOGLE_CLOUD_PROJECT: Google Cloud プロジェクト ID
     認証:
-        GOOGLE_GENAI_USE_VERTEXAI=True（デフォルト: ADC を使用して Vertex AI 経由で呼び出す）
+        GOOGLE_GENAI_USE_ENTERPRISE=True（デフォルト: ADC を使用して Gemini Enterprise Agent Platform 経由で呼び出す）
     エンドポイント:
         GOOGLE_CLOUD_LOCATION=global（`gemini-3.8-flash` / `gemini-4-argon` は `global` / `us` / `eu` で提供）
     """
@@ -38,9 +38,14 @@ class Settings(BaseSettings):
     google_cloud_location: str = "global"
 
     # Gemini Enterprise Agent Platform（旧 Vertex AI）認証フラグ（True = ADC 使用、False = API Key 使用）
-    # google-adk 2.13+ では GOOGLE_GENAI_USE_ENTERPRISE が推奨、互換性のため両方同期する
-    google_genai_use_enterprise: bool | None = None
-    google_genai_use_vertexai: bool = True
+    # 既存のローカル .env に旧 GOOGLE_GENAI_USE_VERTEXAI のみ設定されている場合もフォールバックで読み取る
+    google_genai_use_enterprise: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "google_genai_use_enterprise",
+            "google_genai_use_vertexai",
+        ),
+    )
 
     # モデル設定（公開 GA モデル ID: Flash 系=3.8-flash / 軽量系=3.5-flash-lite / 最上位推論=4-argon）
     default_model: str = "gemini-3.8-flash"
@@ -99,16 +104,10 @@ def _sync_env_vars(settings: Settings) -> None:
 
     既に `os.environ` に明示的な値がある場合は上書きしない（シェルでの export を優先）。
     """
-    use_enterprise = (
-        settings.google_genai_use_enterprise
-        if settings.google_genai_use_enterprise is not None
-        else settings.google_genai_use_vertexai
-    )
     env_mapping: dict[str, str | None] = {
         "GOOGLE_CLOUD_PROJECT": settings.google_cloud_project,
         "GOOGLE_CLOUD_LOCATION": settings.google_cloud_location,
-        "GOOGLE_GENAI_USE_ENTERPRISE": str(use_enterprise),
-        "GOOGLE_GENAI_USE_VERTEXAI": str(use_enterprise),
+        "GOOGLE_GENAI_USE_ENTERPRISE": str(settings.google_genai_use_enterprise),
         "ADK_MAX_LLM_CALLS": str(settings.adk_max_llm_calls),
         "GEMINI_API_KEY": settings.gemini_api_key,
     }

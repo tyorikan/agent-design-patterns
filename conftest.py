@@ -48,7 +48,6 @@ def pytest_configure(config: pytest.Config) -> None:
         os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "unit-test-project")
         os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
         os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "True")
-        os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
 
 # =====================================================

@@ -69,8 +69,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 class Settings(BaseSettings):
     google_cloud_project: str
     google_cloud_location: str = "global"
-    google_genai_use_enterprise: bool | None = None
-    google_genai_use_vertexai: bool = True
+    google_genai_use_enterprise: bool = True
     default_model: str = "gemini-3.8-flash"
     fast_model: str = "gemini-3.5-flash-lite"
     escalation_model: str = "gemini-4-argon"
@@ -97,7 +96,7 @@ def _sync_env_vars(settings: Settings) -> None:
     env_mapping = {
         "GOOGLE_CLOUD_PROJECT": settings.google_cloud_project,
         "GOOGLE_CLOUD_LOCATION": settings.google_cloud_location,
-        "GOOGLE_GENAI_USE_VERTEXAI": str(settings.google_genai_use_vertexai),
+        "GOOGLE_GENAI_USE_ENTERPRISE": str(settings.google_genai_use_enterprise),
         "GEMINI_API_KEY": settings.gemini_api_key,
     }
     for key, value in env_mapping.items():

@@ -17,7 +17,7 @@ RUN uv pip install --system --no-cache \
 COPY app ./app
 COPY agents-cli-manifest.yaml AGENTS.md .agents-cli-spec.md ./
 
-ENV GOOGLE_GENAI_USE_VERTEXAI=True
+ENV GOOGLE_GENAI_USE_ENTERPRISE=True
 ENV GOOGLE_CLOUD_LOCATION=global
 ENV GOOGLE_CLOUD_AGENT_ENGINE_LOCATION=us-central1
 ENV PORT=8080

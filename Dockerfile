@@ -16,7 +16,7 @@ RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
 COPY . .
 
 # 環境変数（デフォルト値）
-ENV GOOGLE_GENAI_USE_VERTEXAI=True
+ENV GOOGLE_GENAI_USE_ENTERPRISE=True
 ENV GOOGLE_CLOUD_LOCATION=global
 ENV DEFAULT_MODEL=gemini-3.8-flash
 ENV ADK_MAX_LLM_CALLS=500

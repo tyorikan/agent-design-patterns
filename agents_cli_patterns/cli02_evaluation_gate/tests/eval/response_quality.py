@@ -31,7 +31,7 @@ def _client() -> genai.Client:
     client = getattr(_local, "client", None)
     if client is None:
         os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
-        os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
+        os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "True")
         client = _local.client = genai.Client()
     return client
 

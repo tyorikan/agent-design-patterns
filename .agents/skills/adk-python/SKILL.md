@@ -38,7 +38,7 @@ pip install "google-adk>=2.13.0" "google-genai>=2.30.0"
 # Vertex AI (ADC / Service Account 使用 - 推奨)
 export GOOGLE_CLOUD_PROJECT="your-project-id"
 export GOOGLE_CLOUD_LOCATION="global"       # グローバルエンドポイント（推奨）
-export GOOGLE_GENAI_USE_VERTEXAI="True"
+export GOOGLE_GENAI_USE_ENTERPRISE="True"
 
 # LLM 呼び出し上限（v2.8.0 で追加。デフォルト 500）
 export ADK_MAX_LLM_CALLS="500"

@@ -27,7 +27,7 @@ class TestEnvExample:
         required_keys = [
             "GOOGLE_CLOUD_PROJECT",
             "GOOGLE_CLOUD_LOCATION=global",
-            "GOOGLE_GENAI_USE_VERTEXAI=True",
+            "GOOGLE_GENAI_USE_ENTERPRISE=True",
             "DEFAULT_MODEL=gemini-3.8-flash",
             "FAST_MODEL=gemini-3.5-flash-lite",
             "ESCALATION_MODEL=gemini-4-argon",
@@ -35,6 +35,9 @@ class TestEnvExample:
         ]
         for key in required_keys:
             assert key in content, f".env.example に {key} が定義されていません"
+        assert "GOOGLE_GENAI_USE_VERTEXAI" not in content, (
+            ".env.example に非推奨の GOOGLE_GENAI_USE_VERTEXAI が残っています"
+        )
 
 
 class TestSettings:
@@ -103,5 +106,13 @@ class TestSettings:
         get_settings.cache_clear()
         get_settings()
         assert "GOOGLE_GENAI_USE_ENTERPRISE" in os.environ
-        assert "GOOGLE_GENAI_USE_VERTEXAI" in os.environ
         assert "ADK_MAX_LLM_CALLS" in os.environ
+
+    def test_legacy_vertexai_env_alias_still_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """既存ローカル環境で旧 GOOGLE_GENAI_USE_VERTEXAI のみ指定された場合のフォールバック読込を確認。"""
+        from shared.config import Settings
+
+        monkeypatch.delenv("GOOGLE_GENAI_USE_ENTERPRISE", raising=False)
+        monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "False")
+        s = Settings(google_cloud_project="unit-test-project", _env_file=None)  # type: ignore[call-arg]
+        assert s.google_genai_use_enterprise is False

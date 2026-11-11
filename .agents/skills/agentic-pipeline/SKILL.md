@@ -167,7 +167,7 @@ class Severity(str, Enum):
 
 `google-antigravity>=0.1.23` では以下の 2 方式をサポートする:
 
-1. **Vertex AI ADC（推奨）**: `GOOGLE_GENAI_USE_VERTEXAI=True`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION=global`
+1. **Gemini Enterprise Agent Platform ADC（推奨）**: `GOOGLE_GENAI_USE_ENTERPRISE=True`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION=global`
 2. **Gemini Developer API Key**: `.env` に `GEMINI_API_KEY=your-api-key` を設定した場合に優先使用
 
 ## ユースケースカタログ
