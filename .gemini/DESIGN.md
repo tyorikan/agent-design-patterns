@@ -70,13 +70,12 @@ class Settings(BaseSettings):
     google_cloud_project: str
     google_cloud_location: str = "global"
     google_genai_use_enterprise: bool = True
-    default_model: str = "gemini-3.8-flash"
+    default_model: str = "gemini-4-hydrogen"
     fast_model: str = "gemini-3.5-flash-lite"
-    escalation_model: str = "gemini-4-argon"
+    escalation_model: str = "gemini-4-carbon"
     thinking_level: str = "MEDIUM"
     adk_max_llm_calls: int = 500
     max_loop_iterations: int = 5
-    agent_temperature: float = 0.1
 
     # PGE ループ設定
     approval_threshold: int = 80   # Evaluator スコア閾値（0-100）
@@ -151,7 +150,7 @@ async def run_agent_trajectory(agent, app_name, query) -> tuple[str, list[str]]:
 | パッケージ管理 | pip (pyproject.toml) + uv (Docker) |
 | エージェントフレームワーク | Google ADK Python 2.13+ (Workflow API) |
 | 自律エージェント SDK | Antigravity SDK 0.1.23+ (google-antigravity) |
-| LLM | Gemini Enterprise Agent Platform (`gemini-3.8-flash` / `gemini-3.5-flash-lite` / `gemini-4-argon`) |
+| LLM | Gemini Enterprise Agent Platform (`gemini-4-hydrogen` / `gemini-3.5-flash-lite` / `gemini-4-carbon`) |
 | エージェント間通信 | A2A Protocol（スキル定義のみ） |
 | セッション管理 | ADK InMemorySessionService |
 | UI | ADK Web UI (`adk web`) |

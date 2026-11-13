@@ -70,7 +70,7 @@ from google.adk.tools import google_search
 
 root_agent = LlmAgent(
     name="my_agent",
-    model="gemini-3.8-flash",          # モデル名
+    model="gemini-4-hydrogen",          # モデル名
     description="エージェントの説明（他エージェントからの参照に使われる）",
     instruction="""
     あなたは役立つアシスタントです。
@@ -107,7 +107,7 @@ from google.genai.types import GenerateContentConfig, ThinkingConfig
 # Thinking Level = HIGH で深い推論を有効化
 agent = LlmAgent(
     name="DeepReasoningAgent",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="複雑な問題を段階的に分析し、論理的に回答してください。",
     generate_content_config=GenerateContentConfig(
         thinking_config=ThinkingConfig(
@@ -143,14 +143,14 @@ from google.adk.workflow import Workflow
 # 各エージェントは output_key でセッション状態に結果を保存
 step1 = LlmAgent(
     name="Extractor",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="与えられたデータから重要な情報を抽出してください。",
     output_key="extracted_data"        # state["extracted_data"] に保存
 )
 
 step2 = LlmAgent(
     name="Cleaner",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="""
     以下のデータをクリーニングしてください:
     {extracted_data}                   # state から参照
@@ -160,7 +160,7 @@ step2 = LlmAgent(
 
 step3 = LlmAgent(
     name="Loader",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="クリーニング済みデータ: {clean_data} を適切な形式で保存してください。",
 )
 
@@ -190,21 +190,21 @@ from google.adk.workflow import Workflow
 # 独立した調査エージェント群（並列実行）
 market_agent = LlmAgent(
     name="MarketResearcher",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="市場トレンドを調査してください。",
     output_key="market_data"
 )
 
 competitor_agent = LlmAgent(
     name="CompetitorAnalyzer",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="競合他社の動向を分析してください。",
     output_key="competitor_data"
 )
 
 customer_agent = LlmAgent(
     name="CustomerInsight",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="顧客フィードバックを分析してください。",
     output_key="customer_data"
 )
@@ -212,7 +212,7 @@ customer_agent = LlmAgent(
 # 集約エージェント
 synthesizer = LlmAgent(
     name="Synthesizer",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="""
     以下の調査結果を統合して包括的なレポートを作成してください:
     - 市場データ: {market_data}
@@ -248,7 +248,7 @@ from google.adk.workflow import Workflow
 
 writer = LlmAgent(
     name="Writer",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="""
     以下のトピックについてドラフトを書いてください: {topic}
     
@@ -261,7 +261,7 @@ writer = LlmAgent(
 
 critic = LlmAgent(
     name="Critic",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="""
     以下のドラフトを評価してください: {draft}
     
@@ -321,7 +321,7 @@ def get_weather(city: str) -> dict:
 # 関数を直接 tools リストに渡す（自動で FunctionTool に変換）
 agent = LlmAgent(
     name="WeatherAgent",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="天気情報を取得して報告してください。",
     tools=[get_weather]               # 関数を直接渡す
 )
@@ -352,7 +352,7 @@ from google.adk.tools import google_search, code_execution
 
 agent = LlmAgent(
     name="ResearchAgent",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="調査と計算を行います。",
     tools=[
         google_search,           # Google 検索
@@ -381,7 +381,7 @@ mcp_tools = MCPToolset(
 
 agent = LlmAgent(
     name="Agent",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="MCP ツールを使って作業してください。",
     tools=[mcp_tools]
 )
@@ -464,7 +464,7 @@ from google.adk.agents import LlmAgent
 # 専門エージェント
 order_agent = LlmAgent(
     name="OrderAgent",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     description="注文状況の確認を担当します。注文番号に関する質問に答えます。",
     instruction="注文番号を確認して状況を報告してください。",
     tools=[check_order_status]
@@ -472,7 +472,7 @@ order_agent = LlmAgent(
 
 refund_agent = LlmAgent(
     name="RefundAgent",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     description="返金処理を担当します。返金リクエストを処理します。",
     instruction="返金条件を確認して処理してください。",
     tools=[process_refund]
@@ -481,7 +481,7 @@ refund_agent = LlmAgent(
 # Coordinator（LLM が自動ルーティング）
 coordinator = LlmAgent(
     name="CustomerServiceCoordinator",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     description="カスタマーサービスのコーディネーター",
     instruction="""
     ユーザーのリクエストを分析し、適切な専門エージェントに委譲してください。
@@ -518,7 +518,7 @@ def after_tool_callback(
 
 agent = LlmAgent(
     name="SafeAgent",
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     instruction="...",
     before_model_callback=before_model_callback,
     after_tool_callback=after_tool_callback,
@@ -605,7 +605,7 @@ from google.adk.agents import LlmAgent
 from google.adk.workflow import Workflow
 
 # パターン1: Single Agent
-agent = LlmAgent(name="Agent", model="gemini-3.8-flash", instruction="...", tools=[...])
+agent = LlmAgent(name="Agent", model="gemini-4-hydrogen", instruction="...", tools=[...])
 
 # パターン2: Sequential (A → B → C)  ※チェーンタプル
 Workflow(name="Pipeline", edges=[('START', a, b, c)])

@@ -21,7 +21,7 @@ flowchart LR
 | ID | パターン名 | ディレクトリ | 解決する設計課題 | 主要な構成要素 |
 |---|---|---|---|---|
 | **CLI-01** | **Spec-Driven Agent** | [`cli01_spec_driven_agent/`](./cli01_spec_driven_agent/) | 目的や境界を定めずに実装を始め、プロンプトとツールの責務が肥大化する問題 | `.agents-cli-spec.md`, `agents-cli-manifest.yaml`, `App(root_agent=...)`, `AGENTS.md` |
-| **CLI-02** | **Evaluation Gate** | [`cli02_evaluation_gate/`](./cli02_evaluation_gate/) | プロンプトやモデルの更新時に発生する回答品質の劣化を見逃す問題 | `tests/eval/eval_config.yaml`, `response_quality.py` (`gemini-3.8-flash`), `scripts/ci_eval_gate.py` |
+| **CLI-02** | **Evaluation Gate** | [`cli02_evaluation_gate/`](./cli02_evaluation_gate/) | プロンプトやモデルの更新時に発生する回答品質の劣化を見逃す問題 | `tests/eval/eval_config.yaml`, `response_quality.py` (`gemini-4-hydrogen`), `scripts/ci_eval_gate.py` |
 | **CLI-03** | **A2A Interoperability** | [`cli03_a2a_interoperability/`](./cli03_a2a_interoperability/) | 異なるチーム・言語間のエージェント連携で内部実装が密結合になる問題 | `is_a2a: true`, `AgentCardBuilder`, `A2aAgentExecutor`, `/a2a/app/.well-known/agent-card.json` |
 | **CLI-04** | **Grounded RAG & Runtime Separation** | [`cli04_grounded_rag_deploy/`](./cli04_grounded_rag_deploy/) | ローカルテストと本番検索基盤の密結合、および推論エンドポイント（`global`）とセッションリージョンの衝突 | `KnowledgeRetriever` Protocol, `resolve_session_region()`, 非 root `Dockerfile` |
 

@@ -4,7 +4,7 @@ metrics_to_run:
   - agent_turn_count
 
 custom_metrics:
-  # 1. ローカル LLM-as-a-Judge（gemini-3.8-flash による 1〜5 段階ルーブリック採点）
+  # 1. ローカル LLM-as-a-Judge（gemini-4-hydrogen による 1〜5 段階ルーブリック採点）
   - name: custom_response_quality
     custom_function_file: response_quality.py
 

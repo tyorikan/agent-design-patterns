@@ -22,7 +22,7 @@ Google Cloud のアーキテクチャガイドおよび Agent Development Kit (A
 git clone <repo-url>
 cd agent-design-patterns
 
-# 環境変数を設定（Gemini 3.8 Flash は global エンドポイントを利用）
+# 環境変数を設定（Gemini 4 Hydrogen は global エンドポイントを利用）
 cp .env.example .env
 # .env を編集して GOOGLE_CLOUD_PROJECT を設定
 
@@ -148,7 +148,7 @@ ADK 1.x から 2.x への詳細な移行手順は [`docs/v1-to-v2-migration-guid
 1. **宣言的グラフ API（`Workflow`）**: `SequentialAgent` / `ParallelAgent` / `LoopAgent` の代わりに `Workflow(edges=[...])` で直列チェーン・並列タプル・条件付きサイクルを統一記述します。
 2. **並列 Fan-in の `JoinNode` と条件分岐の `@node` ルーター**: 並列タプル `(a, b)` の直後には全ブランチの完了を同期する `JoinNode` を配置します（省略するとブランチ数だけ後続ノードが重複発火します）。また、`LlmAgent` は `route` を返さないため、条件付きサイクルの分岐判定と反復上限（`MAX_ITERATIONS`）は `Event(route=...)` を返す `@node` 関数で行います。
 3. **`Workflow` は `BaseNode` サブクラス**: `LlmAgent(sub_agents=[...])` の中には直接入れず、上位の `Workflow` エッジに組み込みます。また `Runner` 実行時は `Runner(node=workflow, ...)`（中断・再開を使う場合は `App(..., resumability_config=ResumabilityConfig(is_resumable=True))` 経由で `Runner(app=app, ...)`）を使用します。
-4. **Gemini 3.8 Flash のエンドポイント設定**: Gemini Enterprise Agent Platform 上で `gemini-3.8-flash` を利用する際は `GOOGLE_CLOUD_LOCATION=global` および `GOOGLE_GENAI_USE_ENTERPRISE=True` を設定します。
+4. **Gemini 4 Hydrogen のエンドポイント設定**: Gemini Enterprise Agent Platform 上で `gemini-4-hydrogen` を利用する際は `GOOGLE_CLOUD_LOCATION=global` および `GOOGLE_GENAI_USE_ENTERPRISE=True` を設定します。
 
 ---
 
@@ -160,8 +160,8 @@ ADK 1.x から 2.x への詳細な移行手順は [`docs/v1-to-v2-migration-guid
 | `google-genai` | `2.34.0+` | Gemini モデルクライアント SDK |
 | `google-agents-cli` | `1.12.0+` | スキャフォールド・評価・デプロイ管理 CLI（`uv tool install` で導入） |
 | `google-antigravity` | `0.1.23+` | Agentic Pipeline 向け自律コーディング SDK |
-| `gemini-4-argon` | GA (`global`) | Model Cascade 等で用いる最上位推論・エスカレーション先モデル |
-| `gemini-3.8-flash` | GA (`global`) | 既定のメイン LLM / 審査モデル |
+| `gemini-4-carbon` | GA (`global`) | Model Cascade 等で用いる最上位フロンティア推論・エスカレーション先モデル |
+| `gemini-4-hydrogen` | GA (`global`) | 既定のメイン LLM / 審査モデル（1M 統合コンテキスト・`XHIGH` 対応） |
 | `gemini-3.5-flash-lite` | GA (`global`) | Model Cascade 等で用いる低遅延・低単価モデル |
 | `pydantic-settings` | `2.13.0+` | 環境変数・型安全設定管理 |
 | `pytest` / `ruff` / `mypy` | 最新安定版 | テスト・リント・静的型検査 |
@@ -178,9 +178,9 @@ gcloud auth application-default login
 GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=global
 GOOGLE_GENAI_USE_ENTERPRISE=True
-DEFAULT_MODEL=gemini-3.8-flash
+DEFAULT_MODEL=gemini-4-hydrogen
 FAST_MODEL=gemini-3.5-flash-lite
-ESCALATION_MODEL=gemini-4-argon
+ESCALATION_MODEL=gemini-4-carbon
 ```
 
 ---
@@ -204,6 +204,6 @@ ESCALATION_MODEL=gemini-4-argon
 - [ADK Agents CLI ガイド](https://adk.dev/get-started/agents-cli/)
 - [ADK Context Compaction ガイド](https://adk.dev/context/compaction/)
 - [Gemini Enterprise Agent Platform ドキュメント](https://docs.cloud.google.com/gemini-enterprise-agent-platform)
-- [Gemini 4 Argon モデル仕様](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-argon)
-- [Gemini 3.8 Flash モデル仕様](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash)
+- [Gemini 4 Carbon 開発者ガイド・モデル仕様](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-carbon)
+- [Gemini 4 Hydrogen 開発者ガイド・モデル仕様](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen)
 - [Gemini API コールへの請求ラベル付与](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/add-labels-to-api-calls)

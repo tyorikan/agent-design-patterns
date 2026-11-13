@@ -355,7 +355,6 @@ def build_guarded_app(
     }
     if isinstance(active_model, str):
         agent_kwargs["generate_content_config"] = types.GenerateContentConfig(
-            temperature=0.0,
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
         )
     agent: BaseAgent = LlmAgent(**agent_kwargs)

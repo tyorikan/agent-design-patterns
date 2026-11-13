@@ -35,7 +35,7 @@ from conftest import (
 class GeminiScriptedLlm(BaseLlm):
     """`is_gemini_model` チェック（`google_search` 等）を通過する決定論的テスト用 LLM。"""
 
-    model: str = "gemini-3.8-flash"
+    model: str = "gemini-4-hydrogen"
     _steps: list[LlmResponse | Callable[[LlmRequest], LlmResponse]] = PrivateAttr(
         default_factory=list
     )
@@ -44,7 +44,7 @@ class GeminiScriptedLlm(BaseLlm):
     def __init__(
         self,
         steps: list[LlmResponse | Callable[[LlmRequest], LlmResponse]],
-        model: str = "gemini-3.8-flash",
+        model: str = "gemini-4-hydrogen",
     ) -> None:
         super().__init__(model=model)
         self._steps = list(steps)

@@ -10,7 +10,7 @@
 flowchart LR
     DATA["1. 評価データセット<br/>(tests/eval/datasets/*.json)"] --> RUN["2. トレース生成・採点<br/>(agents-cli eval run / grade)"]
     RUN --> DET["決定論的 Python 指標<br/>(文字数・ターン数)"]
-    RUN --> JUDGE["LLM-as-a-Judge 指標<br/>(gemini-3.8-flash 構造化採点)"]
+    RUN --> JUDGE["LLM-as-a-Judge 指標<br/>(gemini-4-hydrogen 構造化採点)"]
     DET --> GATE{"3. CI 閾値ゲート<br/>(scripts/ci_eval_gate.py)"}
     JUDGE --> GATE
     GATE -->|"全指標 >= 閾値 (exit 0)"| DEPLOY["リリース許可"]
@@ -53,11 +53,11 @@ BigQuery や LLM 推論などのコスト急増要因を特定し、削減見込
 |---|---|---|
 | `non_empty_structured_answer` | インライン Python 関数（無料・ミリ秒） | 空応答や極端に短い不完全応答でないか |
 | `agent_turn_count` | インライン Python 関数（無料・ミリ秒） | 実行トレース（`agent_data.turns`）が正常に記録されているか |
-| `custom_response_quality` | `response_quality.py`（`gemini-3.8-flash`） | 期待される原因・試算値と矛盾がないかを Pydantic スキーマで 1〜5 点採点 |
+| `custom_response_quality` | `response_quality.py`（`gemini-4-hydrogen`） | 期待される原因・試算値と矛盾がないかを Pydantic スキーマで 1〜5 点採点 |
 
 ### 2. 審査モデル名の外部設定化（`tests/eval/response_quality.py`）
 
-評価コード内に古いモデル名を固定記述すると、モデルの提供終了時に CI パイプライン全体が停止します。環境変数 `EVAL_JUDGE_MODEL`（既定値 `gemini-3.8-flash`）で外部から注入可能にし、`temperature=0.0` と構造化出力（`response_schema`）で採点の再現性を高めています。
+評価コード内に古いモデル名を固定記述すると、モデルの提供終了時に CI パイプライン全体が停止します。環境変数 `EVAL_JUDGE_MODEL`（既定値 `gemini-4-hydrogen`）で外部から注入可能にし、`thinking_level="LOW"` と構造化出力（`response_schema`）で採点の再現性を高めています。
 
 ### 3. CLI 終了コード仕様を補完する閾値判定スクリプト（`scripts/ci_eval_gate.py`）
 

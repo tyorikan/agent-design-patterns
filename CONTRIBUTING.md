@@ -46,7 +46,7 @@ agent-design-patterns/
 │       ├── agent.py             # Workflow / Plugin / Agent 実装
 │       └── demo.py
 ├── shared/                       # 共通ライブラリ
-│   ├── config.py                # Settings（Gemini 3.8 Flash / global 既定）
+│   ├── config.py                # Settings（Gemini 4 Hydrogen / global 既定）
 │   └── demo_runner.py           # LlmAgent / Workflow 両対応のデモ実行ランナー
 ├── docs/                         # 移行ガイド等の技術ドキュメント
 ├── tests/                        # テストピラミッド

@@ -28,9 +28,9 @@ class TestEnvExample:
             "GOOGLE_CLOUD_PROJECT",
             "GOOGLE_CLOUD_LOCATION=global",
             "GOOGLE_GENAI_USE_ENTERPRISE=True",
-            "DEFAULT_MODEL=gemini-3.8-flash",
+            "DEFAULT_MODEL=gemini-4-hydrogen",
             "FAST_MODEL=gemini-3.5-flash-lite",
-            "ESCALATION_MODEL=gemini-4-argon",
+            "ESCALATION_MODEL=gemini-4-carbon",
             "ADK_MAX_LLM_CALLS=500",
         ]
         for key in required_keys:
@@ -51,9 +51,9 @@ class TestSettings:
         settings = get_settings()
         assert settings is not None
         assert settings.google_cloud_location == "global"
-        assert settings.default_model == "gemini-3.8-flash"
+        assert settings.default_model == "gemini-4-hydrogen"
         assert settings.fast_model == "gemini-3.5-flash-lite"
-        assert settings.escalation_model == "gemini-4-argon"
+        assert settings.escalation_model == "gemini-4-carbon"
         assert settings.thinking_level == "MEDIUM"
         assert settings.adk_max_llm_calls == 500
 
@@ -66,25 +66,43 @@ class TestSettings:
             f"default_model が gemini を含んでいません: {settings.default_model}"
         )
 
-    def test_rejects_minimal_thinking_on_gemini_3_8_flash(self) -> None:
-        """gemini-3.8-flash で非対応の thinking_level='MINIMAL' が事前拒否されることを確認。"""
+    def test_rejects_minimal_thinking_on_gemini_4_hydrogen(self) -> None:
+        """gemini-4-hydrogen で非対応の thinking_level='MINIMAL' が事前拒否されることを確認。"""
         from shared.config import Settings
 
         with pytest.raises(ValidationError, match="MINIMAL"):
             Settings(
                 google_cloud_project="unit-test-project",
-                default_model="gemini-3.8-flash",
+                default_model="gemini-4-hydrogen",
                 thinking_level="MINIMAL",
             )
 
-    def test_rejects_minimal_thinking_on_gemini_4_argon(self) -> None:
-        """gemini-4-argon でも非対応の thinking_level='MINIMAL' が事前拒否されることを確認。"""
+    def test_allows_xhigh_thinking_on_gemini_4_hydrogen_and_rejects_on_carbon(self) -> None:
+        """gemini-4-hydrogen は XHIGH を許容し、gemini-4-carbon は XHIGH を事前拒否することを確認。"""
+        from shared.config import Settings
+
+        s = Settings(
+            google_cloud_project="unit-test-project",
+            default_model="gemini-4-hydrogen",
+            thinking_level="xhigh",
+        )
+        assert s.thinking_level == "XHIGH"
+
+        with pytest.raises(ValidationError, match="XHIGH"):
+            Settings(
+                google_cloud_project="unit-test-project",
+                default_model="gemini-4-carbon",
+                thinking_level="XHIGH",
+            )
+
+    def test_rejects_minimal_thinking_on_gemini_4_carbon(self) -> None:
+        """gemini-4-carbon でも非対応の thinking_level='MINIMAL' が事前拒否されることを確認。"""
         from shared.config import Settings
 
         with pytest.raises(ValidationError, match="MINIMAL"):
             Settings(
                 google_cloud_project="unit-test-project",
-                default_model="gemini-4-argon",
+                default_model="gemini-4-carbon",
                 thinking_level="MINIMAL",
             )
 

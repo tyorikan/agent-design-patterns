@@ -256,7 +256,6 @@ def build_contract_workflow(
     }
     if isinstance(active_model, str):
         planner_kwargs["generate_content_config"] = types.GenerateContentConfig(
-            temperature=0.1,
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
         )
     release_planner_agent = LlmAgent(**planner_kwargs)

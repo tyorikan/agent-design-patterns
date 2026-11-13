@@ -108,9 +108,9 @@ class Settings(BaseSettings):
     google_genai_use_enterprise: bool = True
     
     # モデル設定
-    default_model: str = "gemini-3.8-flash"
+    default_model: str = "gemini-4-hydrogen"
     
-    # Thinking Level (LOW / MEDIUM / HIGH)
+    # Thinking Level (LOW / MEDIUM / HIGH / XHIGH)
     thinking_level: str = "MEDIUM"
     
     # LLM 呼び出し上限 (ADK v2.8.0+)
@@ -152,36 +152,36 @@ uv run ruff check .
 
 | モデル | 用途 | コスト |
 |---|---|---|
-| `gemini-3.8-flash` | 高速・高精度（最新 GA 推奨） | 低 |
-| `gemini-3.8-flash` + `thinking_level=HIGH` | 深い推論が必要な複雑タスク | 中 |
+| `gemini-4-hydrogen` | 高速・高精度（最新 GA 推奨・1M 統合コンテキスト） | 低〜中 |
+| `gemini-4-hydrogen` + `thinking_level=XHIGH` | 深い推論が必要な複雑なコーディング・多段階タスク | 中 |
 | `gemini-3.5-flash-lite` | 超低レイテンシ・一次分類・カスケード前段 | 最安 |
-| `gemini-4-argon` | 最上位フロンティア推論・高難度エスカレーション（GA） | 高 |
+| `gemini-4-carbon` | 最上位フロンティア推論・高難度エスカレーション（GA） | 高 |
 
-> **Note:** `gemini-3.8-flash` および `gemini-4-argon` は `location=global` / `us` / `eu` 等で利用可能（`us-central1` 単一リージョンは非対応）。
-> また、両モデルとも `thinking_level` は `LOW` / `MEDIUM` / `HIGH` のみ対応しており、`MINIMAL` を指定すると HTTP 400 バリデーションエラーになる（`gemini-4-argon` では `temperature` / `top_p` / `top_k` も無視されるため指定不要）。
+> **Note:** `gemini-4-hydrogen` および `gemini-4-carbon` は `location=global` / `us` / `eu` 等で利用可能（`us-central1` 単一リージョンは非対応）。
+> `gemini-4-hydrogen` の `thinking_level` は `LOW` / `MEDIUM` / `HIGH`（モデル既定値）/ `XHIGH` に対応しており、`MINIMAL` を指定すると HTTP 400 バリデーションエラーになる（また `temperature` / `top_p` / `top_k` は無視されるため指定不要）。
 
 ```python
 from google.genai.types import GenerateContentConfig, ThinkingConfig
 
-# 標準設定（高速応答）
+# 標準設定（応答速度バランス重視）
 agent = LlmAgent(
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     generate_content_config=GenerateContentConfig(
-        temperature=0.1,
-        max_output_tokens=8192,
-        top_p=0.95,
+        thinking_config=ThinkingConfig(
+            thinking_level="MEDIUM"
+        ),
+        max_output_tokens=32768,
     )
 )
 
-# 深い推論が必要なタスク（Thinking Level = HIGH）
+# 深い推論が必要なタスク（Thinking Level = XHIGH）
 deep_agent = LlmAgent(
-    model="gemini-3.8-flash",
+    model="gemini-4-hydrogen",
     generate_content_config=GenerateContentConfig(
         thinking_config=ThinkingConfig(
-            thinking_level="HIGH"  # LOW / MEDIUM / HIGH
+            thinking_level="XHIGH"  # LOW / MEDIUM / HIGH / XHIGH
         ),
-        temperature=0.1,
-        max_output_tokens=8192,
+        max_output_tokens=65536,
     )
 )
 ```

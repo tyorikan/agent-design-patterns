@@ -4,7 +4,7 @@
 
 **ReAct (Reasoning and Acting) Pattern** は、LLM が「次に何を調べるべきか考える（Thought）→ 外部ツールを呼び出す（Action）→ 実行結果を評価する（Observation）」というサイクルを段階的に回して問題を解くデザインパターンです。
 
-ADK の `LlmAgent` は内部でこのループを自動実行していますが、本パターンでは `Runner.run_async()` が返すイベントストリームを分解し、Gemini 3.8 Flash の**ネイティブ思考パート（`part.thought=True`）**・**関数呼び出し（`function_call`）**・**関数応答（`function_response`）**・**最終回答（`Final Answer`）** を分離して可視化する方法を示します。
+ADK の `LlmAgent` は内部でこのループを自動実行していますが、本パターンでは `Runner.run_async()` が返すイベントストリームを分解し、Gemini 4 Hydrogen の**ネイティブ思考パート（`part.thought=True`）**・**関数呼び出し（`function_call`）**・**関数応答（`function_response`）**・**最終回答（`Final Answer`）** を分離して可視化する方法を示します。
 
 ```mermaid
 flowchart TD
@@ -81,7 +81,7 @@ PYTHONPATH=. .venv/bin/python patterns/p02_react_pattern/demo.py
 
 1. `runner.run_async()` が生成する `Event` と `Part`（`thought`, `function_call`, `function_response`, `text`）の構造
 2. LLM に計算ツールを提供する際のセキュリティ境界（`ast` による構文制限）と自己修正しやすいエラーメッセージ設計
-3. Gemini 3.8 Flash の思考パート（`part.thought=True`）とユーザー向け最終回答の正しい分離方法
+3. Gemini 4 Hydrogen の思考パート（`part.thought=True`）とユーザー向け最終回答の正しい分離方法
 
 ## 次のステップ
 

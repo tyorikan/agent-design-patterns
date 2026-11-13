@@ -1,7 +1,7 @@
 """Cloud Run / Agent Runtime 本番サービング用 Session・Artifact サービス管理。
 
 重要な設計ポイント:
-    `gemini-3.8-flash` は `GOOGLE_CLOUD_LOCATION=global` を必要とする一方、
+    `gemini-4-hydrogen` は `GOOGLE_CLOUD_LOCATION=global` を必要とする一方、
     Agent Runtime のマネージドセッション（`VertexAiSessionService`）はリージョン指定
     （例: `us-central1`）を必要とする。そのため、セッション用ロケーションは
     `GOOGLE_CLOUD_AGENT_ENGINE_LOCATION` を優先参照し、`global` が誤って渡されないよう分離する。

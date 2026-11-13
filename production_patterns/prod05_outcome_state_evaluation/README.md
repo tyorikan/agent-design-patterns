@@ -70,7 +70,7 @@ $$
 
 ### 3. ADK 2.13 評価履歴 JSON の自動パース（`parse_adk_eval_history`）
 
-PyPI 版 `google-adk 2.13.0` では `adk eval` が失敗時に終了コード `1` を返す一方、`pass^k` の組み込み集計器はまだ同梱されていません（また `adk eval` 既定の審査モデル名が旧世代のままハードコードされている箇所があるため、評価設定では現行の `gemini-3.8-flash` を明示指定する必要があります）。本パターンでは `.adk/eval_history/*.evalset_result.json` を直接集計する純粋関数を提供しています。
+PyPI 版 `google-adk 2.13.0` では `adk eval` が失敗時に終了コード `1` を返す一方、`pass^k` の組み込み集計器はまだ同梱されていません（また `adk eval` 既定の審査モデル名が旧世代のままハードコードされている箇所があるため、評価設定では現行の `gemini-4-hydrogen` を明示指定する必要があります）。本パターンでは `.adk/eval_history/*.evalset_result.json` を直接集計する純粋関数を提供しています。
 
 ## トレードオフ
 

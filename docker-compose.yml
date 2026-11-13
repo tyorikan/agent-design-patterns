@@ -9,9 +9,9 @@ services:
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
       - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-global}
       # アプリ設定
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.8-flash}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-4-hydrogen}
       - FAST_MODEL=${FAST_MODEL:-gemini-3.5-flash-lite}
-      - ESCALATION_MODEL=${ESCALATION_MODEL:-gemini-4-argon}
+      - ESCALATION_MODEL=${ESCALATION_MODEL:-gemini-4-carbon}
       - THINKING_LEVEL=${THINKING_LEVEL:-MEDIUM}
       - ADK_MAX_LLM_CALLS=${ADK_MAX_LLM_CALLS:-500}
       - PYTHONPATH=/app
@@ -29,9 +29,9 @@ services:
       - GOOGLE_GENAI_USE_ENTERPRISE=True
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
       - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-global}
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-3.8-flash}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-4-hydrogen}
       - FAST_MODEL=${FAST_MODEL:-gemini-3.5-flash-lite}
-      - ESCALATION_MODEL=${ESCALATION_MODEL:-gemini-4-argon}
+      - ESCALATION_MODEL=${ESCALATION_MODEL:-gemini-4-carbon}
       - THINKING_LEVEL=${THINKING_LEVEL:-MEDIUM}
       - ADK_MAX_LLM_CALLS=${ADK_MAX_LLM_CALLS:-500}
       - PYTHONPATH=/app

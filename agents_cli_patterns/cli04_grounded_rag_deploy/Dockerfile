@@ -9,7 +9,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN uv pip install --system --no-cache \
     "google-adk>=2.13.0" \
-    "google-genai>=2.30.0" \
+    "google-genai>=2.34.0" \
     "fastapi>=0.124.1" \
     "uvicorn>=0.34.0" \
     "httpx>=0.27.0"

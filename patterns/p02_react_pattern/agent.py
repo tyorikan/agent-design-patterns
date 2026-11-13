@@ -6,7 +6,7 @@
     Thought → Action → Observation の各ステップを明示的に可視化する。
 
     ADK では runner.run_async() が返すイベントを解析することで
-    ReAct ループの各フェーズ（Gemini 3.8 Flash のネイティブ思考パートを含む）を追跡できる。
+    ReAct ループの各フェーズ（Gemini 4 Hydrogen のネイティブ思考パートを含む）を追跡できる。
 """
 
 import ast

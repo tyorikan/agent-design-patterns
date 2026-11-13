@@ -29,7 +29,7 @@
 - **言語**: Python 3.12+
 - **パッケージ管理**: uv / pip (pyproject.toml) + CLI ツール分離 (`uv tool install "google-agents-cli>=1.12.0"`)
 - **エージェントフレームワーク**: Google ADK Python 2.13.0 (Workflow API / App / Resumability / BasePlugin)
-- **LLM**: Gemini Enterprise Agent Platform (Vertex AI) `gemini-3.8-flash` / `gemini-4-argon` (`location=global`, Thinking Level `LOW`/`MEDIUM`/`HIGH`) / `gemini-3.5-flash-lite`
+- **LLM**: Gemini Enterprise Agent Platform (Vertex AI) `gemini-4-hydrogen` (`LOW`/`MEDIUM`/`HIGH`/`XHIGH`) / `gemini-4-carbon` (`LOW`/`MEDIUM`/`HIGH`) / `gemini-3.5-flash-lite` (`location=global`)
 - **エージェント間通信**: A2A Protocol (`a2a-sdk`)
 - **外部ツール連携**: MCP (Model Context Protocol)
 - **デプロイ**: Cloud Run / Agent Runtime (旧 Vertex AI Agent Engine)

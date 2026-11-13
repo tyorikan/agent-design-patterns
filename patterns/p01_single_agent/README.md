@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart LR
-    U["ユーザー入力"] --> A["LlmAgent (gcp_docs_agent)<br/>model: gemini-3.8-flash"]
+    U["ユーザー入力"] --> A["LlmAgent (gcp_docs_agent)<br/>model: gemini-4-hydrogen"]
     A <-->|"自律的なツール選択・実行"| T["Tools<br/>- google_search<br/>- get_current_date"]
     A --> R["構造化された回答"]
 ```
@@ -50,7 +50,7 @@ patterns/p01_single_agent/
 1. **関数ツールの型注釈と Docstring**:
    ADK は Python 関数を自動的に `FunctionTool` としてラップし、引数名・型アノテーション・Docstring から関数宣言スキーマ（JSON Schema）を生成してモデルに渡します。そのため、すべてのツール関数には正確な型注釈と役割説明が必要です。
 2. **Gemini 3 系における組み込み検索ツールとカスタム関数ツールの併用**:
-   `gemini-3.8-flash` をルートエージェントで使う場合、組み込みの `google_search` とカスタム関数ツール（`get_current_date`）を同一の `tools=[...]` リストに登録できます。なお、マルチエージェント構成のサブエージェント内で併用する場合は ADK の制約回避のため `GoogleSearchTool(bypass_multi_tools_limit=True)` を明示的に指定する必要があります。
+   `gemini-4-hydrogen` をルートエージェントで使う場合、組み込みの `google_search` とカスタム関数ツール（`get_current_date`）を同一の `tools=[...]` リストに登録できます。なお、マルチエージェント構成のサブエージェント内で併用する場合は ADK の制約回避のため `GoogleSearchTool(bypass_multi_tools_limit=True)` を明示的に指定する必要があります。
 
 ## トレードオフ
 

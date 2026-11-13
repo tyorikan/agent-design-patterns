@@ -14,7 +14,7 @@ from .retriever import KnowledgeRetriever, build_retriever_from_env
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "True")
 
-DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-3.8-flash")
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-4-hydrogen")
 
 _active_retriever: KnowledgeRetriever | None = None
 
@@ -72,7 +72,6 @@ root_agent = Agent(
 """,
     tools=[search_architecture_policies],
     generate_content_config=types.GenerateContentConfig(
-        temperature=0.0,
         thinking_config=types.ThinkingConfig(thinking_level="LOW"),
     ),
 )

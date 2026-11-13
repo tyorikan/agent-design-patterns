@@ -1,7 +1,7 @@
 # Google ADK v1 → v2 マイグレーションガイド
 
-> **対象バージョン**: google-adk `>=1.19.0` → `>=2.13.0` (`google-genai>=2.30.0`, `gemini-3.8-flash`)
-> **調査日**: 2026-05-25（2026-11 ADK 2.13.0 / Gemini 3.8 Flash 追補）
+> **対象バージョン**: google-adk `>=1.19.0` → `>=2.13.0` (`google-genai>=2.34.0`, `gemini-4-hydrogen`)
+> **調査日**: 2026-05-25（2026-11 ADK 2.13.0 / Gemini 4 Hydrogen 追補）
 > **ステータス**: ✅ 移行完了・統合テスト全パス
 
 ---
@@ -106,7 +106,7 @@ sequenceDiagram
 | カテゴリ | API | import パス | 備考 |
 |---------|-----|-----------|------|
 | **エージェント** | `LlmAgent` | `from google.adk.agents import LlmAgent` | クラス名・引数とも変更なし |
-| | `model` | `LlmAgent(model="...")` | 省略時のライブラリ内部既定は旧世代モデルのため、必ず `gemini-3.8-flash` または `gemini-4-argon` を明示指定 |
+| | `model` | `LlmAgent(model="...")` | 省略時のライブラリ内部既定は旧世代モデルのため、必ず `gemini-4-hydrogen` または `gemini-4-carbon` を明示指定 |
 | | `instruction` | `LlmAgent(instruction="...")` | `{variable_name}` プレースホルダーも健在 |
 | | `output_key` | `LlmAgent(output_key="...")` | state スコープ (`user:`, `app:`, `temp:`) も同じ |
 | | `sub_agents` | `LlmAgent(sub_agents=[...])` | LLM ルーティングで動的委譲 |
@@ -386,7 +386,7 @@ graph TB
 
 ## 6. 依存バージョン制約
 
-### v2（ADK 2.13+ / Gemini 3.8 Flash）が要求する主要依存
+### v2（ADK 2.13+ / Gemini 4 Hydrogen）が要求する主要依存
 
 | パッケージ | v1 での要件 | v2 現行構成 | 変更 |
 |-----------|-----------|-----------|------|
@@ -575,8 +575,8 @@ v2 `Workflow` 内で人間の承認待ち（一時停止・再開）を行う場
 
 | ファイル | 使用 deprecated API | 影響度 | ADK 2.13 対応内容 |
 |---------|-------------------|-------|---------|
-| `pyproject.toml` | — | 🔴 必須 | `google-adk>=2.13.0`, `google-genai>=2.30.0` |
-| `shared/config.py` | なし | 🟡 中 | `gemini-3.8-flash` + `global` + `GOOGLE_GENAI_USE_ENTERPRISE` |
+| `pyproject.toml` | — | 🔴 必須 | `google-adk>=2.13.0`, `google-genai>=2.34.0` |
+| `shared/config.py` | なし | 🟡 中 | `gemini-4-hydrogen` + `global` + `GOOGLE_GENAI_USE_ENTERPRISE` |
 | `shared/demo_runner.py` | なし | 🟡 中 | `Workflow`（`Runner(node=...)`）と `App`（`Runner(app=...)`）両対応 |
 | `p01_single_agent/agent.py` | なし | 🟢 軽微 | `LlmAgent` 互換（環境未設定時の遅延検証対応） |
 | `p02_react_pattern/agent.py` | なし | 🟢 軽微 | `LlmAgent` 互換 |

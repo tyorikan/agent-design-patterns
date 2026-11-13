@@ -1,7 +1,7 @@
 """`custom_response_quality` 用インプロセス LLM-as-a-Judge 評価モジュール。
 
 `agents-cli eval grade` / `agents-cli eval run` のワーカープールから呼び出される。
-退役済みモデルのハードコードを避け、`EVAL_JUDGE_MODEL`（既定: `gemini-3.8-flash`）と
+退役済みモデルのハードコードを避け、`EVAL_JUDGE_MODEL`（既定: `gemini-4-hydrogen`）と
 構造化出力（Pydantic スキーマ）で再現性の高い 1〜5 点採点を行う。
 """
 
@@ -16,7 +16,7 @@ from google.genai import types
 from pydantic import BaseModel
 
 _local = threading.local()
-JUDGE_MODEL = os.environ.get("EVAL_JUDGE_MODEL", "gemini-3.8-flash")
+JUDGE_MODEL = os.environ.get("EVAL_JUDGE_MODEL", "gemini-4-hydrogen")
 
 
 class _Verdict(BaseModel):
@@ -60,7 +60,6 @@ def evaluate(instance: dict[str, Any]) -> dict[str, Any]:
         model=JUDGE_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
-            temperature=0.0,
             response_mime_type="application/json",
             response_schema=_Verdict,
             thinking_config=types.ThinkingConfig(thinking_level="LOW"),

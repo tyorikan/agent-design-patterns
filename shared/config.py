@@ -19,7 +19,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # プロジェクトルート（shared/ の親ディレクトリ）
 _PROJECT_ROOT = Path(__file__).parent.parent
 
-_VALID_THINKING_LEVELS = {"MINIMAL", "LOW", "MEDIUM", "HIGH"}
+_VALID_THINKING_LEVELS = {"MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH"}
+_MINIMAL_UNSUPPORTED_PREFIXES = (
+    "gemini-4-hydrogen",
+    "gemini-4-argon",
+    "gemini-4-carbon",
+    "gemini-3.8-flash",
+)
+_XHIGH_SUPPORTED_PREFIXES = ("gemini-4-hydrogen",)
 
 
 class Settings(BaseSettings):
@@ -30,7 +37,7 @@ class Settings(BaseSettings):
     認証:
         GOOGLE_GENAI_USE_ENTERPRISE=True（デフォルト: ADC を使用して Gemini Enterprise Agent Platform 経由で呼び出す）
     エンドポイント:
-        GOOGLE_CLOUD_LOCATION=global（`gemini-3.8-flash` / `gemini-4-argon` は `global` / `us` / `eu` で提供）
+        GOOGLE_CLOUD_LOCATION=global（`gemini-4-hydrogen` / `gemini-4-carbon` は `global` / `us` / `eu` で提供）
     """
 
     # Google Cloud 設定（必須）
@@ -47,18 +54,18 @@ class Settings(BaseSettings):
         ),
     )
 
-    # モデル設定（公開 GA モデル ID: Flash 系=3.8-flash / 軽量系=3.5-flash-lite / 最上位推論=4-argon）
-    default_model: str = "gemini-3.8-flash"
+    # モデル設定（公開 GA モデル ID: 標準=4-hydrogen / 軽量系=3.5-flash-lite / 最上位推論=4-carbon）
+    default_model: str = "gemini-4-hydrogen"
     fast_model: str = "gemini-3.5-flash-lite"
-    escalation_model: str = "gemini-4-argon"
+    escalation_model: str = "gemini-4-carbon"
 
-    # 推論深さ（gemini-3.8-flash / gemini-4-argon は LOW / MEDIUM / HIGH のみ対応。MINIMAL は非対応）
+    # 推論深さ（gemini-4-hydrogen は LOW / MEDIUM / HIGH [モデル既定] / XHIGH に対応、MINIMAL は非対応）
+    # 従来の応答速度バランスを維持するためアプリ既定値は MEDIUM とする
     thinking_level: str = "MEDIUM"
 
     # エージェント実行ガードレール
     adk_max_llm_calls: int = 500
     max_loop_iterations: int = 5
-    agent_temperature: float = 0.1  # 一貫性・再現性を重視
 
     # PGE ループ設定（agentic_pipeline パターン用）
     approval_threshold: int = 80  # Evaluator 承認スコア閾値（0-100）
@@ -87,14 +94,23 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_model_thinking_compatibility(self) -> "Settings":
-        """gemini-3.8-flash / gemini-4-argon で非対応の thinking_level='MINIMAL' を事前に検出する。"""
+        """各モデルの対応する thinking_level 境界（MINIMAL / XHIGH）を事前に検証する。"""
         if (
-            self.default_model.startswith(("gemini-3.8-flash", "gemini-4-argon"))
+            self.default_model.startswith(_MINIMAL_UNSUPPORTED_PREFIXES)
             and self.thinking_level == "MINIMAL"
         ):
             raise ValueError(
                 f"{self.default_model} は thinking_level='MINIMAL' に対応していません。"
-                " 'LOW' / 'MEDIUM' / 'HIGH' のいずれかを指定してください。"
+                " 'LOW' / 'MEDIUM' / 'HIGH'（gemini-4-hydrogen は 'XHIGH' も可）を指定してください。"
+            )
+        if (
+            self.thinking_level == "XHIGH"
+            and self.default_model.startswith("gemini-")
+            and not self.default_model.startswith(_XHIGH_SUPPORTED_PREFIXES)
+        ):
+            raise ValueError(
+                f"{self.default_model} は thinking_level='XHIGH' に対応していません。"
+                " 'XHIGH' は gemini-4-hydrogen で利用可能です。"
             )
         return self
 

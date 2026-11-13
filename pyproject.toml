@@ -1,7 +1,7 @@
 [project]
 name = "agent-design-patterns"
 version = "0.3.0"
-description = "AI エージェントデザインパターンのハンズオン実装コンテンツ（ADK 2.13 / Gemini 3.8 Flash / agents-cli / Production Patterns）"
+description = "AI エージェントデザインパターンのハンズオン実装コンテンツ（ADK 2.13 / Gemini 4 Hydrogen / agents-cli / Production Patterns）"
 readme = "README.md"
 requires-python = ">=3.12"
 # NOTE: google-agents-cli (1.12.x) は protobuf<7 をピン留めするため、
@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 #       `uv tool install "google-agents-cli>=1.12.0"`
 dependencies = [
     "google-adk>=2.13.0",
-    "google-genai>=2.30.0",
+    "google-genai>=2.34.0",
     "google-antigravity>=0.1.23",
     "protobuf>=7.35.0,<8.0.0",
     "a2a-sdk>=1.2.0",

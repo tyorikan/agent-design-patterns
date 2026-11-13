@@ -68,6 +68,16 @@ class ModelPricing:
 
 # Gemini Enterprise Agent Platform 公開料金（global / Standard ティア、プロモーション期間単価を含む）
 VERIFIED_MODEL_PRICING_USD_PER_1M: dict[str, ModelPricing] = {
+    "gemini-4-hydrogen": ModelPricing(
+        input_per_1m=1.50,
+        cached_input_per_1m=0.075,
+        output_per_1m=7.50,
+    ),
+    "gemini-4-carbon": ModelPricing(
+        input_per_1m=2.00,
+        cached_input_per_1m=0.10,
+        output_per_1m=10.00,
+    ),
     "gemini-4-argon": ModelPricing(
         input_per_1m=2.00,
         cached_input_per_1m=0.10,
@@ -220,7 +230,7 @@ class CostBudgetPlugin(BasePlugin):
     def __init__(
         self,
         *,
-        pricing_model_name: str = "gemini-3.8-flash",
+        pricing_model_name: str = "gemini-4-hydrogen",
         max_total_tokens: int = 50_000,
         max_cost_usd: float = 0.10,
         billing_labels: dict[str, str] | None = None,
@@ -392,7 +402,6 @@ def build_compacted_budget_app(
     }
     if isinstance(active_model, str):
         agent_kwargs["generate_content_config"] = types.GenerateContentConfig(
-            temperature=0.0,
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
         )
     agent = LlmAgent(**agent_kwargs)

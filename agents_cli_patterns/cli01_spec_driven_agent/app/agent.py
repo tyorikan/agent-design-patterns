@@ -16,7 +16,7 @@ from google.genai import types
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "True")
 
-DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-3.8-flash")
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-4-hydrogen")
 
 # 決定論的な標準復旧手順（Runbook）カタログ
 _RUNBOOK_CATALOG: dict[str, dict[str, Any]] = {
@@ -143,7 +143,6 @@ root_agent = Agent(
 """,
     tools=[calculate_error_budget, lookup_runbook],
     generate_content_config=types.GenerateContentConfig(
-        temperature=0.1,
         thinking_config=types.ThinkingConfig(thinking_level="LOW"),
     ),
 )

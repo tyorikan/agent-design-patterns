@@ -219,7 +219,6 @@ def build_credit_agent(model: str | BaseLlm | None = None) -> LlmAgent:
     }
     if isinstance(active_model, str):
         kwargs["generate_content_config"] = types.GenerateContentConfig(
-            temperature=0.0,
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
         )
     return LlmAgent(**kwargs)

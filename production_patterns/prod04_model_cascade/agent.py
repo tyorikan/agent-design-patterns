@@ -220,7 +220,6 @@ def build_cascade_workflow(
     }
     if isinstance(m_fast, str):
         fast_kwargs["generate_content_config"] = types.GenerateContentConfig(
-            temperature=0.1,
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL),
         )
     fast_drafter = LlmAgent(**fast_kwargs)
@@ -264,7 +263,6 @@ def build_cascade_workflow(
     }
     if isinstance(m_judge, str):
         judge_kwargs["generate_content_config"] = types.GenerateContentConfig(
-            temperature=0.0,
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
         )
     judge_agent = LlmAgent(**judge_kwargs)
@@ -296,14 +294,9 @@ def build_cascade_workflow(
         "output_key": "strong_answer",
     }
     if isinstance(m_strong, str):
-        # gemini-4-argon はサンプリングパラメータ（temperature / top_p / top_k）を無視する公式仕様のため除外する
-        strong_gen_kwargs: dict[str, Any] = {
-            "thinking_config": types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH),
-        }
-        if not m_strong.startswith("gemini-4-argon"):
-            strong_gen_kwargs["temperature"] = 0.1
+        # Gemini 4 系（gemini-4-carbon / gemini-4-hydrogen）はサンプリングパラメータ（temperature / top_p / top_k）を無視する公式仕様のため指定しない
         strong_kwargs["generate_content_config"] = types.GenerateContentConfig(
-            **strong_gen_kwargs
+            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH),
         )
     strong_agent = LlmAgent(**strong_kwargs)
 

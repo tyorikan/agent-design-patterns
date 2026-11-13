@@ -68,7 +68,7 @@ class TestCli01SpecDrivenAgent:
         assert app.name == "app"
         assert app.root_agent is root_agent
         assert root_agent.name == "slo_diagnostics_agent"
-        assert root_agent.model == "gemini-3.8-flash"
+        assert root_agent.model == "gemini-4-hydrogen"
 
     def test_calculate_error_budget_statuses(self) -> None:
         from agents_cli_patterns.cli01_spec_driven_agent.app.agent import calculate_error_budget

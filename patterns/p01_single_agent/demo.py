@@ -10,7 +10,7 @@ from shared.demo_runner import run_demo
 
 DEMO_QUERIES = [
     "Cloud Run と Cloud Run functions の違いを教えてください。どちらを選ぶべきですか？",
-    "Gemini Enterprise Agent Platform (Vertex AI) で Gemini 3.8 Flash を使う最小限の Python コードを教えてください",
+    "Gemini Enterprise Agent Platform (Vertex AI) で Gemini 4 Hydrogen を使う最小限の Python コードを教えてください",
     "Spanner と BigQuery の使い分けを教えてください",
 ]
 

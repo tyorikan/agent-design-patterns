@@ -58,7 +58,7 @@ ADK 公式の [Callbacks Design Patterns — Guardrails & Policy Enforcement](ht
 
 ### 3. Google Cloud Model Armor との併用時の注意点
 
-本番環境では `App(plugins=[...])` に `google.adk.integrations.model_armor.ModelArmorPlugin` を追加できます。`gemini-3.8-flash` は `GOOGLE_CLOUD_LOCATION=global` エンドポイントを使用しますが、Model Armor API は `us-central1` 等のリージョンエンドポイントを使用するため、それぞれのロケーション設定を分離し、ユーザー入力だけでなくツール出力検査も有効化してください。
+本番環境では `App(plugins=[...])` に `google.adk.integrations.model_armor.ModelArmorPlugin` を追加できます。`gemini-4-hydrogen` は `GOOGLE_CLOUD_LOCATION=global` エンドポイントを使用しますが、Model Armor API は `us-central1` 等のリージョンエンドポイントを使用するため、それぞれのロケーション設定を分離し、ユーザー入力だけでなくツール出力検査も有効化してください。
 
 ## トレードオフ
 

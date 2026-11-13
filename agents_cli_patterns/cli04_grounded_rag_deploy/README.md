@@ -19,7 +19,7 @@ flowchart TD
 ✅ **適している場合:**
 - 社内規定・設計標準・製品マニュアルなど、必ず出典 ID を伴う根拠ベースの回答（Grounding）が求められ、記載のない事項には「該当規定なし」と回答させる必要がある場合
 - データストア未構築の開発初期やオフライン CI 環境でも、本番と同じエージェントコードを高速に単体テストしたい場合
-- `gemini-3.8-flash`（`global` エンドポイント）と Agent Runtime / マネージドセッション（リージョン指定必須）を併用してデプロイする場合
+- `gemini-4-hydrogen`（`global` エンドポイント）と Agent Runtime / マネージドセッション（リージョン指定必須）を併用してデプロイする場合
 
 ❌ **不向きな場合・できないこと:**
 - **単一クエリ検索だけでは複数文書を跨ぐ複雑な条件統合を取りこぼす場合がある**: 「規定 A の原則と別紙 B の例外条件を突き合わせる」ような多段検索が必要な場合は、クエリ分解ステップ（`patterns/p04_parallel` や `Workflow`）を前段に組み合わせる必要がある
@@ -48,7 +48,7 @@ RPO/RTO 基準やコンテナ運用規約に関する質問には該当文書 ID
 
 ### 2. 推論エンドポイント（`global`）とセッションリージョンの分離（`app/app_utils/services.py`）
 
-`gemini-3.8-flash` は `GOOGLE_CLOUD_LOCATION=global` で利用しますが、Agent Runtime や `VertexAiSessionService` は `us-central1` や `asia-northeast1` などの具体リージョンを要求します。同一の環境変数を流用すると `global-aiplatform.googleapis.com` という無効なホスト名で起動時エラーになるため、`resolve_session_region()` でセッション用リージョンを独立して解決しています。
+`gemini-4-hydrogen` は `GOOGLE_CLOUD_LOCATION=global` で利用しますが、Agent Runtime や `VertexAiSessionService` は `us-central1` や `asia-northeast1` などの具体リージョンを要求します。同一の環境変数を流用すると `global-aiplatform.googleapis.com` という無効なホスト名で起動時エラーになるため、`resolve_session_region()` でセッション用リージョンを独立して解決しています。
 
 ### 3. `agents-cli deploy --dry-run` によるデプロイ構成の事前検証
 
