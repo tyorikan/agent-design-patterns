@@ -1,12 +1,12 @@
 # Production Design Patterns（本番運用デザインパターン集）
 
-基礎オーケストレーション（[`patterns/`](../patterns/)）および開発ライフサイクル管理（[`agents_cli_patterns/`](../agents_cli_patterns/)）に加え、ミッションクリティカルな本番システムでエージェントを安全・高品質・低コストに稼働させるための **7 つの普遍的デザインパターン** を実装したトラックです。
+基礎オーケストレーション（[`patterns/`](../patterns/)）および開発ライフサイクル管理（[`agents_cli_patterns/`](../agents_cli_patterns/)）に加え、ミッションクリティカルな本番システムでエージェントを安全・高品質・低コストに稼働させるための **8 つの普遍的デザインパターン** を実装したトラックです。
 
 特定の業種・プロジェクトに依存せず、ADK 2.x（`google-adk >= 2.13`）を採用するあらゆる本番エージェントにそのまま組み込める再利用可能な設計パターンとして構成しています。
 
 ---
 
-## 全体アーキテクチャ（7 パターンの責務配置）
+## 全体アーキテクチャ（8 パターンの責務配置）
 
 ```mermaid
 flowchart TB
@@ -14,8 +14,9 @@ flowchart TB
     P3In --> P6Pre["PROD-06: Context Compaction & Budget Guard<br/>EventsCompactionConfig + 同期予算チェック"]
     P6Pre --> P1Pre["PROD-01: Contract-Based Execution<br/>事前条件ゲート + 一時障害 RetryConfig"]
     P1Pre --> P4["PROD-04: Model Cascade<br/>Fast モデル → Pre-Gate → 二値 Judge → 上位モデル"]
-    P4 --> P7["PROD-07: Governed Knowledge & Attested Computation<br/>OKF v0.3 段階的開示・信頼/鮮度評価・非 LLM 計算検証"]
-    P4 --> P2["PROD-02: Idempotent Tool & Approval Gate<br/>閾値ベース人間承認 + SHA-256 冪等性台帳"]
+    P4 --> P8["PROD-08: AI Gateway Mediation<br/>プロセス外仲介・資格情報隔離・トークン制限・優先度制御・ルーティング"]
+    P8 --> P7["PROD-07: Governed Knowledge & Attested Computation<br/>OKF v0.3 段階的開示・信頼/鮮度評価・非 LLM 計算検証"]
+    P8 --> P2["PROD-02: Idempotent Tool & Approval Gate<br/>閾値ベース人間承認 + SHA-256 冪等性台帳"]
     P7 --> P3Out["PROD-03 / PROD-06 (Tool & Output)<br/>ツール出力検疫・Artifact 退避・外部送信遮断"]
     P2 --> P3Out
     P3Out --> P1Post["PROD-01: Postcondition Gate<br/>業務不変条件検証・反復上限キャップ"]
@@ -35,14 +36,15 @@ flowchart TB
 | **PROD-05** | **Outcome State Evaluation** | [`prod05_outcome_state_evaluation/`](prod05_outcome_state_evaluation/) | 「変更しました」と答えて DB 未更新のハルシネーション、`Pass@k` による信頼性過大評価 | 環境状態検証 ($S_{\text{final}} == S_{\text{gold}}$)、無偏 `pass^k`、Wilson 信頼区間 |
 | **PROD-06** | **Context Compaction & Budget Guard** | [`prod06_context_compaction_budget/`](prod06_context_compaction_budget/) | 大容量ツール出力による $O(D^2)$ トークン膨張、暴走時の推論費青天井、請求ラベル上限枯渇 | `ArtifactService`, `EventsCompactionConfig`, 同期予算遮断プラグイン, ラベル検証 |
 | **PROD-07** | **Governed Knowledge & Attested Computation** | [`prod07_governed_knowledge_attestation/`](prod07_governed_knowledge_attestation/) | AI 改訂後の未確認知識や廃止規定の誤参照、アドホック SQL による集計ハルシネーション | OKF v0.3 段階的探索、Trust Tier/鮮度/廃止転送評価、非 LLM Attester、`BasePlugin` Fail-Closed |
+| **PROD-08** | **AI Gateway Mediation** | [`prod08_ai_gateway_mediation/`](prod08_ai_gateway_mediation/) | 複数エージェント間のトークン枠独占、プロバイダ鍵の分散管理、障害時切替・キャッシュ親和性制御の欠如 | `BaseLlm` HTTP 仲介クライアント、2 段階トークン制限・優先度シェディング、`RoutingStrategy` Protocol、GenAI 会計台帳 |
 
 ---
 
 ## 実行とテスト
 
-すべてのパターンは、外部ネットワークやクラウド認証情報を一切必要としない決定論的 `ScriptedLlm(BaseLlm)` ダブルによって、インプロセスで ADK `Runner` の全分岐を単体検証できます。
+すべてのパターンは、外部ネットワークやクラウド認証情報を一切必要としない決定論的テストダブルおよびインプロセス HTTP によって、ADK `Runner` の全分岐を単体検証できます。
 
 ```bash
-# 全 7 パターンの単体・インプロセス結合テストを一括実行
+# 全 8 パターンの単体・インプロセス結合テストを一括実行
 .venv/bin/pytest tests/unit/test_production_patterns.py -v
 ```

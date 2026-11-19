@@ -1,4 +1,4 @@
-"""production_patterns（PROD-01 〜 PROD-07）の単体・インプロセス ADK 結合テスト。
+"""production_patterns（PROD-01 〜 PROD-08）の単体・インプロセス ADK 結合テスト。
 
 決定論的な `ScriptedLlm(BaseLlm)` ダブルを用いて、外部ネットワークやクラウド認証を一切使わずに
 ADK 2.13 の `Runner` / `Workflow` / `RetryConfig` / `FunctionTool(require_confirmation=...)` /
@@ -1638,5 +1638,631 @@ class TestProd07GovernedKnowledgeAttestation:
         assert missing_res["attested"] is False
         assert "rows" not in missing_res
         assert "compiled_sql" in missing_res["attestation_reason"]
+
+
+# =====================================================
+# PROD-08: AI Gateway Mediation
+# =====================================================
+class TestProd08AiGatewayMediation:
+    @pytest.mark.asyncio
+    async def test_authn_authz_model_discovery_and_credential_isolation(self) -> None:
+        import httpx
+
+        from production_patterns.prod08_ai_gateway_mediation.gateway import (
+            AiGatewayService,
+            TenantPolicy,
+            create_gateway_fastapi_app,
+        )
+        from production_patterns.prod08_ai_gateway_mediation.routing import (
+            BackendEndpoint,
+            MockInferenceBackend,
+        )
+
+        backend_std = MockInferenceBackend(backend_id="std-1", physical_model="phys-std")
+        backend_pro = MockInferenceBackend(backend_id="pro-1", physical_model="phys-pro")
+
+        service = AiGatewayService(
+            tenants=[
+                TenantPolicy.from_raw_key(
+                    tenant_id="tenant-a",
+                    raw_api_key="tok-a",
+                    allowed_models={"tier:standard"},
+                    token_budget_per_window=5_000,
+                )
+            ],
+            endpoints=[
+                BackendEndpoint(
+                    backend_id="std-1",
+                    logical_model="tier:standard",
+                    backend=backend_std,
+                    credential_ref="vault://provider-std-key",
+                ),
+                BackendEndpoint(
+                    backend_id="pro-1",
+                    logical_model="tier:frontier",
+                    backend=backend_pro,
+                    credential_ref="vault://provider-pro-key",
+                ),
+            ],
+        )
+        gw_app = create_gateway_fastapi_app(service)
+
+        async with httpx.AsyncClient(
+            base_url="http://ai-gateway.local",
+            transport=httpx.ASGITransport(app=gw_app),
+        ) as client:
+            # 1) 未認証は 401
+            r_unauth = await client.get("/v1/models")
+            assert r_unauth.status_code == 401
+
+            # 2) 認可済みモデルのみ Model Discovery で返却される
+            r_models = await client.get(
+                "/v1/models", headers={"Authorization": "Bearer tok-a"}
+            )
+            assert r_models.status_code == 200
+            assert [m["id"] for m in r_models.json()["data"]] == ["tier:standard"]
+
+            # 3) 未認可モデル (tier:frontier) は 403、未登録モデルは 404
+            r_forbid = await client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": "Bearer tok-a"},
+                json={"model": "tier:frontier", "messages": [{"role": "user", "content": "hi"}]},
+            )
+            assert r_forbid.status_code == 403
+
+            r_notfound = await client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": "Bearer tok-a"},
+                json={"model": "tier:unknown", "messages": [{"role": "user", "content": "hi"}]},
+            )
+            assert r_notfound.status_code == 404
+
+            # 4) 認可済みモデルは Gateway 内部の資格情報参照でバックエンドへ転送される
+            r_ok = await client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": "Bearer tok-a"},
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "hello"}]},
+            )
+            assert r_ok.status_code == 200
+            assert backend_std.received_credentials == ["vault://provider-std-key"]
+            assert r_ok.headers["X-Gateway-Backend"] == "std-1"
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_failover_recovery_and_non_retryable_400(self) -> None:
+        import httpx
+
+        from production_patterns.prod08_ai_gateway_mediation.gateway import (
+            AiGatewayService,
+            TenantPolicy,
+            create_gateway_fastapi_app,
+        )
+        from production_patterns.prod08_ai_gateway_mediation.routing import (
+            BackendEndpoint,
+            FailoverRoutingStrategy,
+            MockInferenceBackend,
+        )
+
+        now_box = [1_000.0]
+        primary_backend = MockInferenceBackend(
+            backend_id="primary",
+            physical_model="m-primary",
+            failure_script=[503],  # 1 回目のみ 503、復帰後は成功
+        )
+        secondary_backend = MockInferenceBackend(
+            backend_id="secondary",
+            physical_model="m-secondary",
+        )
+        ep_primary = BackendEndpoint(
+            backend_id="primary",
+            logical_model="tier:standard",
+            backend=primary_backend,
+            priority_order=0,
+        )
+        ep_secondary = BackendEndpoint(
+            backend_id="secondary",
+            logical_model="tier:standard",
+            backend=secondary_backend,
+            priority_order=1,
+        )
+
+        service = AiGatewayService(
+            tenants=[
+                TenantPolicy.from_raw_key(
+                    tenant_id="t1",
+                    raw_api_key="k1",
+                    allowed_models={"tier:standard"},
+                    token_budget_per_window=10_000,
+                )
+            ],
+            endpoints=[ep_primary, ep_secondary],
+            routing_strategy=FailoverRoutingStrategy(),
+            circuit_failure_threshold=1,
+            circuit_recovery_timeout_seconds=30.0,
+            clock=lambda: now_box[0],
+        )
+        gw_app = create_gateway_fastapi_app(service)
+        hdr = {"Authorization": "Bearer k1"}
+
+        async with httpx.AsyncClient(
+            base_url="http://ai-gateway.local",
+            transport=httpx.ASGITransport(app=gw_app),
+        ) as client:
+            # 1) Primary が 503 -> サーキット開放し Secondary へ自動フェイルオーバー
+            r1 = await client.post(
+                "/v1/chat/completions",
+                headers=hdr,
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "q1"}]},
+            )
+            assert r1.status_code == 200
+            assert r1.headers["X-Gateway-Backend"] == "secondary"
+            assert r1.headers["X-Gateway-Failover-Count"] == "1"
+            assert ep_primary.is_circuit_open(now_box[0]) is True
+
+            # 2) サーキット開放中は Primary を呼ばずに直接 Secondary へ送る
+            r2 = await client.post(
+                "/v1/chat/completions",
+                headers=hdr,
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "q2"}]},
+            )
+            assert r2.status_code == 200
+            assert r2.headers["X-Gateway-Backend"] == "secondary"
+            assert r2.headers["X-Gateway-Failover-Count"] == "0"
+            assert primary_backend.call_count == 1
+
+            # 3) recovery_timeout 経過後 (ハーフオープン) は Primary を再試行し、成功でサーキット閉鎖
+            now_box[0] += 35.0
+            r3 = await client.post(
+                "/v1/chat/completions",
+                headers=hdr,
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "q3"}]},
+            )
+            assert r3.status_code == 200
+            assert r3.headers["X-Gateway-Backend"] == "primary"
+            assert ep_primary.is_circuit_open(now_box[0]) is False
+
+        # 4) 400 系クライアント起因エラーはサーキットを開放せずフェイルオーバーもしない
+        bad_req_backend = MockInferenceBackend(backend_id="b400", failure_script=[400])
+        ep_400 = BackendEndpoint(
+            backend_id="b400", logical_model="tier:standard", backend=bad_req_backend, priority_order=0
+        )
+        ep_backup = BackendEndpoint(
+            backend_id="backup",
+            logical_model="tier:standard",
+            backend=MockInferenceBackend(backend_id="backup"),
+            priority_order=1,
+        )
+        svc_400 = AiGatewayService(
+            tenants=[
+                TenantPolicy.from_raw_key(
+                    tenant_id="t1", raw_api_key="k1", allowed_models={"tier:standard"}, token_budget_per_window=5_000
+                )
+            ],
+            endpoints=[ep_400, ep_backup],
+            circuit_failure_threshold=1,
+        )
+        async with httpx.AsyncClient(
+            base_url="http://ai-gateway.local",
+            transport=httpx.ASGITransport(app=create_gateway_fastapi_app(svc_400)),
+        ) as client:
+            r400 = await client.post(
+                "/v1/chat/completions",
+                headers=hdr,
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "bad"}]},
+            )
+            assert r400.status_code == 400
+            assert ep_400.failure_count == 0
+            assert ep_backup.backend.call_count == 0  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_prefix_and_load_aware_routing_and_saturation_exclusion(self) -> None:
+        from production_patterns.prod08_ai_gateway_mediation.routing import (
+            BackendEndpoint,
+            ChatMessage,
+            InferenceRequest,
+            MockInferenceBackend,
+            PrefixLoadAwareRoutingStrategy,
+        )
+
+        strategy = PrefixLoadAwareRoutingStrategy(prefix_weight=0.65, load_weight=0.35)
+        req = InferenceRequest(
+            logical_model="tier:pool",
+            messages=(ChatMessage(role="user", content="hello"),),
+            tenant_id="t1",
+            prefix_key="sys:code-review:v3",
+        )
+
+        ep_saturated = BackendEndpoint(
+            backend_id="ep-sat",
+            logical_model="tier:pool",
+            backend=MockInferenceBackend(backend_id="ep-sat"),
+            queue_depth=10,
+            max_queue_depth=10,
+            cached_prefixes={"sys:code-review:v3"},
+        )
+        ep_warm = BackendEndpoint(
+            backend_id="ep-warm",
+            logical_model="tier:pool",
+            backend=MockInferenceBackend(backend_id="ep-warm"),
+            queue_depth=2,
+            max_queue_depth=10,
+            cached_prefixes={"sys:code-review:v3"},
+        )
+        ep_cold_idle = BackendEndpoint(
+            backend_id="ep-cold",
+            logical_model="tier:pool",
+            backend=MockInferenceBackend(backend_id="ep-cold"),
+            queue_depth=0,
+            max_queue_depth=10,
+        )
+
+        ranked = strategy.select_candidates([ep_saturated, ep_cold_idle, ep_warm], req, now=100.0)
+        # 飽和 ep-sat は除外され、キャッシュ一致の ep-warm が ep-cold より高スコアで先頭になる
+        assert [ep.backend_id for ep in ranked] == ["ep-warm", "ep-cold"]
+        assert strategy.score_endpoint(ep_warm, req.prefix_key) > strategy.score_endpoint(
+            ep_cold_idle, req.prefix_key
+        )
+
+    @pytest.mark.asyncio
+    async def test_two_phase_token_rate_limit_priority_shedding_and_concurrency(self) -> None:
+        import asyncio
+
+        import httpx
+
+        from production_patterns.prod08_ai_gateway_mediation.gateway import (
+            AiGatewayService,
+            TenantPolicy,
+            TokenCostWeights,
+            create_gateway_fastapi_app,
+        )
+        from production_patterns.prod08_ai_gateway_mediation.routing import (
+            BackendEndpoint,
+            MockInferenceBackend,
+        )
+
+        now_box = [2_000.0]
+        # 1 呼出の重み付き消費: input=100*1 + output=50*4 + thought=0 = 300 weighted tokens
+        backend = MockInferenceBackend(
+            backend_id="pool-1",
+            input_tokens=100,
+            output_tokens=50,
+            thought_tokens=0,
+            simulated_latency_seconds=0.02,
+        )
+        service = AiGatewayService(
+            tenants=[
+                TenantPolicy.from_raw_key(
+                    tenant_id="tenant-a",
+                    raw_api_key="ka",
+                    allowed_models={"tier:standard"},
+                    token_budget_per_window=500,
+                    window_seconds=60,
+                    shedding_utilization_threshold=0.50,
+                )
+            ],
+            endpoints=[
+                BackendEndpoint(backend_id="pool-1", logical_model="tier:standard", backend=backend)
+            ],
+            cost_weights=TokenCostWeights(input_weight=1.0, output_weight=4.0, thought_weight=4.0),
+            clock=lambda: now_box[0],
+        )
+        gw_app = create_gateway_fastapi_app(service)
+        hdr = {"Authorization": "Bearer ka"}
+
+        async with httpx.AsyncClient(
+            base_url="http://ai-gateway.local",
+            transport=httpx.ASGITransport(app=gw_app),
+        ) as client:
+            # 1) 1 回目成功: 300/500 (60% >= 50% 閾値) 消費
+            r1 = await client.post(
+                "/v1/chat/completions",
+                headers={**hdr, "X-Request-Priority": "standard"},
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "first"}]},
+            )
+            assert r1.status_code == 200
+            assert r1.headers["X-RateLimit-Remaining"] == "200"
+
+            # 2) batch 優先度は 60% >= 50% で先行 429 シェディングされる
+            r_batch = await client.post(
+                "/v1/chat/completions",
+                headers={**hdr, "X-Request-Priority": "batch"},
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "batch job"}]},
+            )
+            assert r_batch.status_code == 429
+            assert int(r_batch.headers["Retry-After"]) >= 1
+
+            # 3) critical 優先度は残り 200 枠内で通過し、精算後に枠を使い切る
+            r_crit = await client.post(
+                "/v1/chat/completions",
+                headers={**hdr, "X-Request-Priority": "critical"},
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "urgent"}]},
+            )
+            assert r_crit.status_code == 200
+            assert r_crit.headers["X-RateLimit-Remaining"] == "0"
+
+            # 4) 枠枯渇後は critical でも 429
+            r_exhausted = await client.post(
+                "/v1/chat/completions",
+                headers={**hdr, "X-Request-Priority": "critical"},
+                json={"model": "tier:standard", "messages": [{"role": "user", "content": "over"}]},
+            )
+            assert r_exhausted.status_code == 429
+
+            # 5) ウィンドウ経過後に回復し、並列 5 リクエストで TOCTOU 超過が起きないことを検証
+            now_box[0] += 61.0
+            long_msg = "x" * 800  # 推定予約 200 tokens -> 500 枠なので同時通過は最大 2 件
+            concurrent_resps = await asyncio.gather(
+                *[
+                    client.post(
+                        "/v1/chat/completions",
+                        headers={**hdr, "X-Request-Priority": "standard"},
+                        json={
+                            "model": "tier:standard",
+                            "messages": [{"role": "user", "content": long_msg}],
+                        },
+                    )
+                    for _ in range(5)
+                ]
+            )
+            ok_count = sum(1 for r in concurrent_resps if r.status_code == 200)
+            rl_count = sum(1 for r in concurrent_resps if r.status_code == 429)
+            assert ok_count == 2
+            assert rl_count == 3
+
+        summary = service.telemetry.tenant_summary("tenant-a")
+        assert summary["succeeded"] == 4
+        assert summary["rate_limited_429"] == 5
+        assert summary["total_weighted_tokens"] == 1_200
+
+    @pytest.mark.asyncio
+    async def test_adk_runner_end_to_end_via_gateway_client_llm(self) -> None:
+        from production_patterns.prod08_ai_gateway_mediation.agent import (
+            AiGatewayService,
+            BackendEndpoint,
+            TenantPolicy,
+            build_gateway_mediated_app,
+        )
+        from production_patterns.prod08_ai_gateway_mediation.routing import (
+            FailoverRoutingStrategy,
+            MockInferenceBackend,
+        )
+
+        # Primary 1 回目失敗 -> Secondary へ自動フェイルオーバーし ADK Runner へ正常応答が戻る
+        service = AiGatewayService(
+            tenants=[
+                TenantPolicy.from_raw_key(
+                    tenant_id="tenant-adk",
+                    raw_api_key="adk-tenant-secret",
+                    allowed_models={"tier:standard"},
+                    token_budget_per_window=2_000,
+                )
+            ],
+            endpoints=[
+                BackendEndpoint(
+                    backend_id="primary-down",
+                    logical_model="tier:standard",
+                    backend=MockInferenceBackend(
+                        backend_id="primary-down",
+                        failure_script=[503],
+                    ),
+                    priority_order=0,
+                ),
+                BackendEndpoint(
+                    backend_id="secondary-ok",
+                    logical_model="tier:standard",
+                    backend=MockInferenceBackend(
+                        backend_id="secondary-ok",
+                        physical_model="phys-sec-v1",
+                        response_prefix="GATEWAY_OK",
+                        input_tokens=80,
+                        output_tokens=40,
+                        thought_tokens=10,
+                    ),
+                    priority_order=1,
+                ),
+            ],
+            routing_strategy=FailoverRoutingStrategy(),
+            circuit_failure_threshold=1,
+        )
+
+        mediated_app, gw_service, gw_llm = build_gateway_mediated_app(
+            gateway_service=service,
+            logical_model="tier:standard",
+            tenant_api_key="adk-tenant-secret",
+            priority="critical",
+            prefix_key="sys:advisor:v1",
+        )
+        discovered = await gw_llm.discover_models()
+        assert [m["id"] for m in discovered] == ["tier:standard"]
+
+        session_service = InMemorySessionService()
+        session = await session_service.create_session(app_name=mediated_app.name, user_id="u1")
+        runner = Runner(app=mediated_app, session_service=session_service)
+        try:
+            events = [
+                ev
+                async for ev in runner.run_async(
+                    user_id="u1",
+                    session_id=session.id,
+                    new_message=types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text="ゲートウェイ経由の応答確認")],
+                    ),
+                )
+            ]
+        finally:
+            await runner.close()
+
+        final_texts = [
+            part.text
+            for ev in events
+            if ev.is_final_response() and ev.content and ev.content.parts
+            for part in ev.content.parts
+            if part.text
+        ]
+        assert any("GATEWAY_OK" in t and "secondary-ok" in t for t in final_texts)
+        assert gw_llm.last_response_headers.get("x-gateway-backend") == "secondary-ok"
+        assert gw_llm.last_response_headers.get("x-gateway-failover-count") == "1"
+        summary = gw_service.telemetry.tenant_summary("tenant-adk")
+        assert summary["succeeded"] == 1
+        assert summary["total_failover_attempts"] == 1
+
+    @pytest.mark.asyncio
+    async def test_hardening_window_rollover_noisy_neighbor_concurrent_load_and_unreachable_gw(
+        self,
+    ) -> None:
+        import asyncio
+
+        import httpx
+
+        from production_patterns.prod08_ai_gateway_mediation.agent import GatewayClientLlm
+        from production_patterns.prod08_ai_gateway_mediation.gateway import (
+            AiGatewayService,
+            TenantPolicy,
+            TokenRateLimiter,
+            create_gateway_fastapi_app,
+        )
+        from production_patterns.prod08_ai_gateway_mediation.routing import (
+            BackendEndpoint,
+            MockInferenceBackend,
+            PrefixLoadAwareRoutingStrategy,
+        )
+
+        # 1) ウィンドウ切替を跨ぐ settle() が新ウィンドウの予約残高を誤減算しないことを検証
+        now_box = [100.0]
+        limiter = TokenRateLimiter(
+            tenants={
+                "t1": TenantPolicy.from_raw_key(
+                    tenant_id="t1",
+                    raw_api_key="k1",
+                    allowed_models={"m1"},
+                    token_budget_per_window=1_000,
+                    window_seconds=60,
+                )
+            },
+            clock=lambda: now_box[0],
+        )
+        old_res = await limiter.reserve(tenant_id="t1", estimated_tokens=200, priority="standard")
+        now_box[0] = 161.0  # 新ウィンドウへ移行
+        new_res = await limiter.reserve(tenant_id="t1", estimated_tokens=500, priority="standard")
+        assert new_res.remaining == 500
+        # 旧ウィンドウのリクエストが失敗 (actual=0) して精算しても、新ウィンドウの 500 消費は減らない
+        after_old_settle = await limiter.settle(
+            tenant_id="t1",
+            reserved_tokens=old_res.reserved_tokens,
+            actual_weighted_tokens=0,
+            tenant_window_start=old_res.tenant_window_start,
+            shared_window_start=old_res.shared_window_start,
+        )
+        assert after_old_settle.remaining == 500
+
+        # 2) マルチテナント隔離 (Tenant A の枠超過が Tenant B の critical を阻害しない) + 並列負荷分散
+        ep1 = BackendEndpoint(
+            backend_id="rep-1",
+            logical_model="tier:pool",
+            backend=MockInferenceBackend(
+                backend_id="rep-1",
+                input_tokens=100,
+                output_tokens=50,
+                thought_tokens=0,
+                simulated_latency_seconds=0.04,
+            ),
+            max_queue_depth=4,
+        )
+        ep2 = BackendEndpoint(
+            backend_id="rep-2",
+            logical_model="tier:pool",
+            backend=MockInferenceBackend(
+                backend_id="rep-2",
+                input_tokens=100,
+                output_tokens=50,
+                thought_tokens=0,
+                simulated_latency_seconds=0.04,
+            ),
+            max_queue_depth=4,
+        )
+        multi_svc = AiGatewayService(
+            tenants=[
+                TenantPolicy.from_raw_key(
+                    tenant_id="tenant-a",
+                    raw_api_key="key-a",
+                    allowed_models={"tier:pool"},
+                    token_budget_per_window=300,
+                ),
+                TenantPolicy.from_raw_key(
+                    tenant_id="tenant-b",
+                    raw_api_key="key-b",
+                    allowed_models={"tier:pool"},
+                    token_budget_per_window=1_000,
+                ),
+            ],
+            endpoints=[ep1, ep2],
+            routing_strategy=PrefixLoadAwareRoutingStrategy(prefix_weight=0.2, load_weight=0.8),
+            shared_pool_budget=2_000,
+        )
+        multi_app = create_gateway_fastapi_app(multi_svc)
+
+        async with httpx.AsyncClient(
+            base_url="http://ai-gateway.local",
+            transport=httpx.ASGITransport(app=multi_app),
+        ) as client:
+            # 同時 2 件のリクエストが queue_depth に応じて rep-1 と rep-2 へ分散する
+            r_c1, r_c2 = await asyncio.gather(
+                client.post(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer key-b"},
+                    json={"model": "tier:pool", "messages": [{"role": "user", "content": "job1"}]},
+                ),
+                client.post(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer key-b"},
+                    json={"model": "tier:pool", "messages": [{"role": "user", "content": "job2"}]},
+                ),
+            )
+            assert {r_c1.headers["X-Gateway-Backend"], r_c2.headers["X-Gateway-Backend"]} == {
+                "rep-1",
+                "rep-2",
+            }
+            assert ep1.queue_depth == 0
+            assert ep2.queue_depth == 0
+
+            # Tenant A が自身の枠 (300) を枯渇させても Tenant B の critical は影響を受けない
+            ra1 = await client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": "Bearer key-a"},
+                json={"model": "tier:pool", "messages": [{"role": "user", "content": "a1"}]},
+            )
+            ra2 = await client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": "Bearer key-a"},
+                json={"model": "tier:pool", "messages": [{"role": "user", "content": "a2"}]},
+            )
+            rb = await client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": "Bearer key-b", "X-Request-Priority": "critical"},
+                json={"model": "tier:pool", "messages": [{"role": "user", "content": "b-ok"}]},
+            )
+            assert ra1.status_code == 200
+            assert ra2.status_code == 429
+            assert rb.status_code == 200
+
+        # 3) Gateway 接続不能時、GatewayClientLlm がテナント秘密鍵を漏洩せず GATEWAY_UNAVAILABLE を返す
+        unreachable_llm = GatewayClientLlm(
+            logical_model="tier:standard",
+            tenant_api_key="super-secret-tenant-token",
+            gateway_base_url="http://127.0.0.1:1",
+            timeout_seconds=0.5,
+        )
+        req = LlmRequest(
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text="ping")])]
+        )
+        resps = [r async for r in unreachable_llm.generate_content_async(req)]
+        assert len(resps) == 1
+        assert resps[0].error_code == "GATEWAY_UNAVAILABLE"
+        assert resps[0].content is not None and resps[0].content.parts is not None
+        out_text = resps[0].content.parts[0].text or ""
+        assert "GATEWAY_UNAVAILABLE" in out_text
+        assert "super-secret-tenant-token" not in out_text
+
+
 
 

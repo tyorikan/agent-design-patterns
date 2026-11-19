@@ -106,4 +106,4 @@ PYTHONPATH=. .venv/bin/python production_patterns/prod07_governed_knowledge_atte
 
 ## 次のステップ
 
-→ **[Production Patterns 一覧に戻る](../README.md)**: 全 7つの本番運用デザインパターンの全体像と組み合わせ方を確認する
+→ **[PROD-08: AI Gateway Mediation パターン](../prod08_ai_gateway_mediation/)**: 複数エージェント・複数テナントを横断する資格情報隔離、トークン基準レート制限と優先度シェディング、サーキットブレーカー自動フェイルオーバーおよびプレフィックス親和性ルーティングを学ぶ

@@ -624,3 +624,17 @@ class TestProductionPatternsIntegration:
         )
         assert len(response) > 20
         assert "12,200,000" in response or "12200000" in response
+
+    @pytest.mark.asyncio
+    async def test_prod08_ai_gateway_mediation(self):
+        mod = load_production_pattern_agent("prod08_ai_gateway_mediation")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "マルチテナント推論基盤でリクエスト数ではなくトークン数でレート制限する理由を簡潔に教えてください。",
+        )
+        assert len(response) > 20
+        summary = mod._default_gateway_service.telemetry.tenant_summary("tenant-interactive")
+        assert summary["succeeded"] >= 1
+        assert summary["total_input_tokens"] > 0
+        assert summary["total_output_tokens"] > 0
