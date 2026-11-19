@@ -2,7 +2,7 @@
 
 Google Cloud のアーキテクチャガイドおよび Agent Development Kit (ADK) 2.x に基づく、AI エージェントデザインパターンのハンズオン実装カタログです。
 
-基礎的なオーケストレーションから、`agents-cli` を用いたエージェント開発ライフサイクル、さらにミッションクリティカルな本番システムで求められる信頼性・安全性・評価・コスト制御までを **3 つのトラック（全 23 パターン）** として体系化しています。
+基礎的なオーケストレーションから、`agents-cli` を用いたエージェント開発ライフサイクル、さらにミッションクリティカルな本番システムで求められる信頼性・安全性・評価・コスト制御・知識ガバナンスまでを **3 つのトラック（全 24 パターン）** として体系化しています。
 
 ---
 
@@ -35,7 +35,7 @@ pip install -e ".[dev]"
 ### 実行方法
 
 ```bash
-# 1. Lv.1 ユニットテスト（外部 API 通信なし・全 3 トラック 120 テストを約 6 秒で検証）
+# 1. Lv.1 ユニットテスト（外部 API 通信なし・全 3 トラック 132 テストを約 6 秒で検証）
 .venv/bin/pytest tests/unit/ -v
 
 # 2. 各パターンのデモ実行（GOOGLE_CLOUD_PROJECT 設定時）
@@ -57,7 +57,7 @@ docker compose up
 ```mermaid
 flowchart LR
     T1["Track 1: Core Orchestration<br/>(patterns/)<br/>単一・直列・並列・ループ・協調"] --> T2["Track 2: Agents CLI Lifecycle<br/>(agents_cli_patterns/)<br/>仕様駆動・評価ゲート・A2A・RAG 分離"]
-    T2 --> T3["Track 3: Production Patterns<br/>(production_patterns/)<br/>契約実行・冪等承認・隔離・カスケード・状態評価・圧縮予算"]
+    T2 --> T3["Track 3: Production Patterns<br/>(production_patterns/)<br/>契約実行・冪等承認・隔離・カスケード・状態評価・圧縮予算・知識ガバナンス"]
 ```
 
 ---
@@ -121,6 +121,7 @@ flowchart LR
 | **PROD-04** | **Model Cascade** | [`production_patterns/prod04_model_cascade/`](production_patterns/prod04_model_cascade/) | 全件上位モデル利用の高コスト・高遅延、審査器の採点誤差 | 決定論的 Pre-Gate、Fail-Closed 二値審査、Rogan–Gladen 補正 |
 | **PROD-05** | **Outcome State Evaluation** | [`production_patterns/prod05_outcome_state_evaluation/`](production_patterns/prod05_outcome_state_evaluation/) | 口頭のみの完了報告（DB 未更新）、`Pass@k` による信頼性過信 | 最終環境状態検証 ($S_{\text{final}} == S_{\text{gold}}$)、無偏 `pass^k` |
 | **PROD-06** | **Context Compaction & Budget Guard** | [`production_patterns/prod06_context_compaction_budget/`](production_patterns/prod06_context_compaction_budget/) | 大容量ツール出力による $O(D^2)$ トークン膨張、推論費の上限超過 | `ArtifactService` 自動退避、`EventsCompactionConfig`、同期予算遮断器 |
+| **PROD-07** | **Governed Knowledge & Attested Computation** | [`production_patterns/prod07_governed_knowledge_attestation/`](production_patterns/prod07_governed_knowledge_attestation/) | AI 改訂後の未確認知識や廃止規定の誤参照、アドホック SQL による集計ハルシネーション | OKF v0.3 段階的開示、Trust Tier/鮮度/廃止転送評価、非 LLM Attester、`BasePlugin` Fail-Closed |
 
 ---
 
@@ -138,6 +139,7 @@ flowchart LR
 | 定型質問は高速・安価に返し、難問だけ上位モデルへ回したい | `prod04_model_cascade` |
 | モデル更新時に「連続して何回でも確実に成功するか」を CI で検証したい | `prod05_outcome_state_evaluation` |
 | 長期対話や巨大ログ出力でコンテキストと推論費が膨らむのを止めたい | `prod06_context_compaction_budget` |
+| 知識の鮮度・信頼ティア・廃止転送を守り、承認済み SQL の実行結果だけを検証して返したい | `prod07_governed_knowledge_attestation` |
 
 ---
 
@@ -207,3 +209,5 @@ ESCALATION_MODEL=gemini-4-carbon
 - [Gemini 4 Carbon 開発者ガイド・モデル仕様](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-carbon)
 - [Gemini 4 Hydrogen 開発者ガイド・モデル仕様](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen)
 - [Gemini API コールへの請求ラベル付与](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/add-labels-to-api-calls)
+- [Open Knowledge Format (OKF) v0.3 仕様書 (`SPEC.md`)](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
+- [Google Cloud Blog: Introducing OKF v0.3](https://cloud.google.com/blog/products/data-analytics/introducing-okf-v0-3)

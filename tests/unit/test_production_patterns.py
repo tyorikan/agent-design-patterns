@@ -1,4 +1,4 @@
-"""production_patterns（PROD-01 〜 PROD-06）の単体・インプロセス ADK 結合テスト。
+"""production_patterns（PROD-01 〜 PROD-07）の単体・インプロセス ADK 結合テスト。
 
 決定論的な `ScriptedLlm(BaseLlm)` ダブルを用いて、外部ネットワークやクラウド認証を一切使わずに
 ADK 2.13 の `Runner` / `Workflow` / `RetryConfig` / `FunctionTool(require_confirmation=...)` /
@@ -1129,3 +1129,514 @@ class TestProd06ContextCompactionBudget:
             if part.text
         ]
         assert any("[BUDGET_EXCEEDED]" in t for t in texts)
+
+
+# =====================================================
+# PROD-07: Governed Knowledge & Attested Computation
+# =====================================================
+class TestProd07GovernedKnowledgeAttestation:
+    def test_okf_v03_bundle_metadata_and_non_concept_skip(self) -> None:
+        from datetime import UTC, datetime
+
+        from production_patterns.prod07_governed_knowledge_attestation.agent import (
+            DEFAULT_BUNDLE_DIR,
+            OkfBundle,
+        )
+
+        bundle = OkfBundle(DEFAULT_BUNDLE_DIR, now=datetime(2026, 11, 19, tzinfo=UTC))
+        assert bundle.metadata.okf_version == "0.3"
+        assert bundle.metadata.license == "Apache-2.0"
+        assert bundle.metadata.extra.get("x-sample-owner") == "team:finance-engineering"
+
+        # README.md / index.md / log.md / references/*.md (type なし) は Concept 一覧へ混入しない (§3.1, §3.2)
+        concept_ids = {c.concept_id for c in bundle.iter_concepts()}
+        assert concept_ids == {
+            "metrics/income_statement",
+            "computations/recognized_revenue",
+            "computations/gross_profit",
+            "policies/revenue_recognition",
+            "policies/legacy_margin_policy",
+            "policies/discount_approval",
+        }
+
+        listing = bundle.list_directory("")
+        readme_items = [c for c in listing["children"] if c["name"] == "README.md"]
+        assert len(readme_items) == 1
+        assert readme_items[0]["kind"] == "non_concept_markdown"
+
+    def test_v03_trust_tier_downgrade_freshness_and_superseded_redirect(self) -> None:
+        from datetime import UTC, datetime
+
+        from production_patterns.prod07_governed_knowledge_attestation.agent import (
+            DEFAULT_BUNDLE_DIR,
+            OkfBundle,
+        )
+
+        bundle = OkfBundle(DEFAULT_BUNDLE_DIR, now=datetime(2026, 11, 19, tzinfo=UTC))
+
+        # 1) エージェント編集後に人間承認が古くなった Concept は unverified へ自動降格 (§5.3)
+        discount_doc, _ = bundle.read_concept("policies/discount_approval")
+        assert discount_doc.trust_tier == "unverified"
+        assert discount_doc.verified_before_last_change is True
+        assert len(discount_doc.current_verifications) == 0
+        assert len(discount_doc.historical_verifications) == 1
+
+        # 2) process: アクターは machine-confirmed、stale_after 超過は is_stale=True (§5.3, §5.5)
+        profit_doc, _ = bundle.read_concept("computations/gross_profit")
+        assert profit_doc.trust_tier == "machine-confirmed"
+        assert profit_doc.is_stale is True
+        assert profit_doc.stale_malformed is False
+
+        # 3) deprecated Concept は superseded_by により現行ポリシーへ自動転送 (§5.4)
+        resolved_doc, redirects = bundle.read_concept(
+            "policies/legacy_margin_policy", follow_superseded=True
+        )
+        assert resolved_doc.concept_id == "policies/revenue_recognition"
+        assert resolved_doc.trust_tier == "human-reviewed"
+        assert redirects == ["policies/legacy_margin_policy"]
+
+        # 4) 脚注 [^id] と sources[].id の帰属解決 (§5.1)
+        rev_doc, _ = bundle.read_concept("computations/recognized_revenue")
+        assert [s.id for s in rev_doc.cited_sources] == ["rev-policy", "exec-rev-dash"]
+
+    def test_path_traversal_malformed_stale_permissive_consumption_and_conflict(
+        self, tmp_path: Path
+    ) -> None:
+        from datetime import UTC, datetime
+
+        from production_patterns.prod07_governed_knowledge_attestation.okf_bundle import (
+            DuplicateFrontmatterKeyError,
+            OkfBundle,
+            PathTraversalError,
+            resolve_concept_conflict,
+        )
+
+        (tmp_path / "index.md").write_text(
+            '---\nokf_version: "0.3"\ntitle: Test Bundle\n---\n# Root\n',
+            encoding="utf-8",
+        )
+        # 未知 type・スカラー tags・未知拡張キー・書式不正 stale_after の寛容処理 (§5.5, §11.2)
+        (tmp_path / "custom_item.md").write_text(
+            "---\n"
+            "type: Custom Domain Concept\n"
+            "tags: single, tag\n"
+            "stale_after: not-a-timestamp\n"
+            "x-team-custom: 42\n"
+            "verified:\n"
+            '  by: "team:platform"\n'
+            '  at: "2026-10-01T00:00:00Z"\n'
+            "---\n"
+            "See [broken](./does-not-exist.md).\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "winner.md").write_text(
+            "---\n"
+            "type: Policy\n"
+            'generated: { by: "human:alice", at: "2026-10-01T00:00:00Z" }\n'
+            'verified: { by: "human:alice", at: "2026-10-02T00:00:00Z" }\n'
+            'stale_after: "2028-01-01"\n'
+            "---\n"
+            "Winner body.\n",
+            encoding="utf-8",
+        )
+
+        bundle = OkfBundle(tmp_path, now=datetime(2026, 11, 19, tzinfo=UTC))
+
+        # パストラバーサルを拒否 (§6)
+        with pytest.raises(PathTraversalError):
+            bundle.read_concept("../etc/passwd")
+        with pytest.raises(PathTraversalError):
+            bundle.list_directory("../../")
+
+        # 寛容消費: カンマ入りスカラー tags は分割しない、team: は machine-confirmed、不正 stale_after は鮮度切れ扱い
+        custom, _ = bundle.read_concept("custom_item")
+        assert custom.tags == ("single, tag",)
+        assert custom.trust_tier == "machine-confirmed"
+        assert custom.is_stale is True
+        assert custom.stale_malformed is True
+        assert custom.frontmatter["x-team-custom"] == 42
+
+        # 競合解決: human-reviewed かつ鮮度内の Concept が勝つ
+        winner, _ = bundle.read_concept("winner")
+        assert resolve_concept_conflict([custom, winner]).concept_id == "winner"
+
+        # 重複キーは拒否 (§4)
+        (tmp_path / "dup.md").write_text(
+            "---\ntype: Policy\ntype: Duplicate\n---\nBody\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(DuplicateFrontmatterKeyError):
+            bundle.read_concept("dup")
+
+    def test_attested_computation_valid_and_tampered_sql_fail_closed(self) -> None:
+        from datetime import UTC, datetime
+
+        from production_patterns.prod07_governed_knowledge_attestation.agent import (
+            DEFAULT_BUNDLE_DIR,
+            OkfBundle,
+        )
+        from production_patterns.prod07_governed_knowledge_attestation.attestation import (
+            ComputationReceipt,
+            ExecutionJobRecord,
+            SqlEqualityAttester,
+            SqliteComputationExecutor,
+            execute_and_attest_computation,
+        )
+
+        bundle = OkfBundle(DEFAULT_BUNDLE_DIR, now=datetime(2026, 11, 19, tzinfo=UTC))
+        executor = SqliteComputationExecutor()
+        attester = SqlEqualityAttester()
+
+        # 1) 正常系: 2026年度の認識売上 (4,850,000 + 3,950,000 + 3,400,000 = 12,200,000)
+        ok_res = execute_and_attest_computation(
+            bundle=bundle,
+            concept_id="computations/recognized_revenue",
+            parameters={"year": 2026},
+            executor=executor,
+            attester=attester,
+        )
+        assert ok_res["attested"] is True
+        assert ok_res["attestation_ok"] is True
+        assert ok_res["trust_tier"] == "human-reviewed"
+        assert ok_res["is_stale"] is False
+        assert ok_res["rows"] == [{"fiscal_year": 2026, "total_recognized_revenue_usd": 12_200_000}]
+        assert ok_res["receipt_ref"].startswith("sqlite-job-")
+
+        # 2) パラメータ型違反 (bool は integer ではない) および未宣言パラメータを拒否
+        bad_param = execute_and_attest_computation(
+            bundle=bundle,
+            concept_id="computations/recognized_revenue",
+            parameters={"year": True, "injected": "1=1"},
+            executor=executor,
+            attester=attester,
+        )
+        assert bad_param["attested"] is False
+        assert "rows" not in bad_param
+
+        # 3) 異常系: 実行器が承認済み SQL を勝手に書き換えた場合 -> Attester が検知し Fail-Closed で値を返さない
+        class TamperedSqlExecutor(SqliteComputationExecutor):
+            def execute(self, *, sql: str, parameters: dict[str, Any]) -> ComputationReceipt:
+                del sql
+                tampered_sql = "SELECT 2026 AS fiscal_year, 999999999 AS total_recognized_revenue_usd"
+                rec = super().execute(sql=tampered_sql, parameters={})
+                # 権威ログにも改ざんされた SQL が残るため、Attester が確実に不一致を検知する
+                self._ledger[rec.job_id] = ExecutionJobRecord(
+                    job_id=rec.job_id,
+                    runtime=self.runtime_name,
+                    executed_sql=tampered_sql,
+                    bound_parameters=dict(parameters),
+                    rows=rec.rows,
+                    result_sha256=rec.result_sha256,
+                )
+                return rec
+
+        tampered_res = execute_and_attest_computation(
+            bundle=bundle,
+            concept_id="computations/recognized_revenue",
+            parameters={"year": 2026},
+            executor=TamperedSqlExecutor(),
+            attester=attester,
+        )
+        assert tampered_res["attested"] is False
+        assert tampered_res["attestation_ok"] is False
+        assert "rows" not in tampered_res
+        assert "改ざん検知" in tampered_res["attestation_reason"]
+
+    @pytest.mark.asyncio
+    async def test_adk_runner_progressive_disclosure_attestation_and_plugin_fail_closed(
+        self,
+    ) -> None:
+        from datetime import UTC, datetime
+
+        from production_patterns.prod07_governed_knowledge_attestation.agent import (
+            build_governed_knowledge_app,
+        )
+        from production_patterns.prod07_governed_knowledge_attestation.attestation import (
+            AttestationVerdict,
+            ComputationReceipt,
+            SqliteComputationExecutor,
+        )
+
+        # シナリオ A: 段階的探索 -> 廃止転送 -> 鮮度切れ警告付き計算 -> 正常検証計算
+        llm_happy = ScriptedLlm(
+            [
+                _tool_call_resp("list_bundle_index", {"directory": ""}, call_id="c1"),
+                _tool_call_resp(
+                    "read_concept",
+                    {"concept_id": "policies/legacy_margin_policy", "follow_superseded": True},
+                    call_id="c2",
+                ),
+                _tool_call_resp(
+                    "run_attested_computation",
+                    {
+                        "concept_id": "computations/gross_profit",
+                        "parameters_json": '{"year": 2026, "segment": "online"}',
+                    },
+                    call_id="c3",
+                ),
+                _tool_call_resp(
+                    "run_attested_computation",
+                    {
+                        "concept_id": "computations/recognized_revenue",
+                        "parameters_json": '{"year": 2026}',
+                    },
+                    call_id="c4",
+                ),
+                _text_resp(
+                    "2026年度の認識売上は $12,200,000 (human-reviewed, attested)、"
+                    "online 粗利は $2,054,000 (machine-confirmed, stale 警告あり) です。"
+                ),
+            ]
+        )
+
+        app_happy, plugin_happy = build_governed_knowledge_app(
+            model=llm_happy,
+            now=datetime(2026, 11, 19, tzinfo=UTC),
+        )
+        session_service = InMemorySessionService()
+        session = await session_service.create_session(app_name=app_happy.name, user_id="u1")
+        runner = Runner(app=app_happy, session_service=session_service)
+
+        events = [
+            ev
+            async for ev in runner.run_async(
+                user_id="u1",
+                session_id=session.id,
+                new_message=types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text="2026年度の認識売上と online 粗利を教えて")],
+                ),
+            )
+        ]
+        fn_responses = [
+            part.function_response.response
+            for ev in events
+            if ev.content and ev.content.parts
+            for part in ev.content.parts
+            if part.function_response
+        ]
+        assert fn_responses[0]["bundle_metadata"]["okf_version"] == "0.3"
+        assert fn_responses[1]["concept_id"] == "policies/revenue_recognition"
+        assert fn_responses[1]["redirected_from"] == ["policies/legacy_margin_policy"]
+        assert fn_responses[2]["attested"] is True
+        assert fn_responses[2]["is_stale"] is True
+        assert fn_responses[2]["rows"][0]["gross_profit_usd"] == 2_054_000
+        assert fn_responses[3]["attested"] is True
+        assert fn_responses[3]["rows"][0]["total_recognized_revenue_usd"] == 12_200_000
+
+        assert plugin_happy.superseded_redirects == 1
+        assert plugin_happy.stale_warnings == 1
+        assert plugin_happy.fail_closed_blocks == 0
+        assert len(plugin_happy.audit_log) == 4
+
+        # シナリオ B: Attester 失敗時に KnowledgeGovernancePlugin が確実に Fail-Closed 遮断を記録
+        class AlwaysFailAttester:
+            def attest(
+                self,
+                *,
+                concept: Any,
+                sanctioned_sql: str,
+                expected_parameters: dict[str, Any],
+                receipt: ComputationReceipt,
+                executor: Any,
+            ) -> AttestationVerdict:
+                del concept, sanctioned_sql, expected_parameters, receipt, executor
+                return AttestationVerdict(ok=False, reason="テスト用強制 Attestation 失敗")
+
+        llm_fail = ScriptedLlm(
+            [
+                _tool_call_resp(
+                    "run_attested_computation",
+                    {
+                        "concept_id": "computations/recognized_revenue",
+                        "parameters_json": '{"year": 2026}',
+                    },
+                    call_id="c_fail",
+                ),
+                _text_resp("検証に失敗したため数値を表示できません。"),
+            ]
+        )
+        app_fail, plugin_fail = build_governed_knowledge_app(
+            model=llm_fail,
+            executor=SqliteComputationExecutor(),
+            attester=AlwaysFailAttester(),
+            now=datetime(2026, 11, 19, tzinfo=UTC),
+        )
+        session_fail = await session_service.create_session(app_name=app_fail.name, user_id="u2")
+        runner_fail = Runner(app=app_fail, session_service=session_service)
+        fail_events = [
+            ev
+            async for ev in runner_fail.run_async(
+                user_id="u2",
+                session_id=session_fail.id,
+                new_message=types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text="2026年度の売上を計算して")],
+                ),
+            )
+        ]
+        fail_fn_resps = [
+            part.function_response.response
+            for ev in fail_events
+            if ev.content and ev.content.parts
+            for part in ev.content.parts
+            if part.function_response
+        ]
+        assert fail_fn_resps[0]["attested"] is False
+        assert fail_fn_resps[0]["value_redacted_fail_closed"] is True
+        assert "rows" not in fail_fn_resps[0]
+        assert plugin_fail.fail_closed_blocks == 1
+
+    def test_hardening_malformed_generated_at_bom_yaml11_resilience_and_code_fences(
+        self, tmp_path: Path
+    ) -> None:
+        from datetime import UTC, datetime
+
+        from production_patterns.prod07_governed_knowledge_attestation.okf_bundle import (
+            OkfBundle,
+            extract_inline_computation,
+        )
+
+        (tmp_path / "index.md").write_text(
+            '\ufeff---\nokf_version: "0.3"\ntitle: Hardening Bundle\n---\n# Root\n',
+            encoding="utf-8",
+        )
+        # 1) 不正 generated.at (タイムゾーン欠落) でも過去 human 検証が Fail-Open 昇格しない
+        (tmp_path / "bad_gen_at.md").write_text(
+            "---\n"
+            "type: Policy\n"
+            'generated: { by: "agent/v1", at: "2026-11-10T10:00:00" }\n'
+            'verified: { by: "human:alice", at: "2026-10-01T00:00:00Z" }\n'
+            "---\n"
+            "Body\n",
+            encoding="utf-8",
+        )
+        # 2) UTF-8 BOM + YAML 1.1 非 RFC 3339 1桁月日 (2028-6-1) は鮮度切れ (malformed) 扱い
+        (tmp_path / "bom_and_non_rfc3339.md").write_text(
+            "\ufeff---\n"
+            "type: Policy\n"
+            "stale_after: 2028-6-1\n"
+            "sources:\n"
+            "  - id: real-src\n"
+            "    resource: https://example.com/real\n"
+            "    title: Real Source\n"
+            "  - id: code-only-src\n"
+            "    resource: https://example.com/code-only\n"
+            "    title: Code Only\n"
+            "---\n"
+            "本文参照[^real-src]。インラインコード `[^code-only-src]` と `[fake](./fake.md)` は無視。\n\n"
+            "```bash\n"
+            "# Computation\n"
+            "echo 'not a real computation' [^code-only-src] [fake2](./fake2.md)\n"
+            "```\n\n"
+            "## computation\n\n"
+            "```sql\n"
+            "SELECT 1 AS ok\n"
+            "```\n",
+            encoding="utf-8",
+        )
+        # 3) 破損 YAML ファイルが 1 件混在しても全体スキャンと一覧取得は停止しない
+        (tmp_path / "broken_yaml.md").write_text(
+            "---\ntype: [unclosed\n---\nBroken\n",
+            encoding="utf-8",
+        )
+
+        bundle = OkfBundle(tmp_path, now=datetime(2026, 11, 19, tzinfo=UTC))
+        assert bundle.metadata.okf_version == "0.3"
+        assert bundle.metadata.title == "Hardening Bundle"
+
+        # 破損ファイルはスキップされ、正常 2 件が読み込める
+        scanned_ids = {c.concept_id for c in bundle.iter_concepts()}
+        assert scanned_ids == {"bad_gen_at", "bom_and_non_rfc3339"}
+        listing = bundle.list_directory("")
+        malformed_entries = [c for c in listing["children"] if c["kind"] == "malformed_markdown"]
+        assert len(malformed_entries) == 1
+        assert malformed_entries[0]["name"] == "broken_yaml.md"
+
+        # 不正 generated.at は Fail-Closed で unverified
+        bad_gen, _ = bundle.read_concept("bad_gen_at")
+        assert bad_gen.generated_at_malformed is True
+        assert bad_gen.trust_tier == "unverified"
+        assert bad_gen.verified_before_last_change is True
+
+        # BOM 読込・非 RFC 3339 stale_after 検出・コード内リンク/脚注/見出し誤抽出防止
+        bom_doc, _ = bundle.read_concept("bom_and_non_rfc3339")
+        assert bom_doc.is_stale is True
+        assert bom_doc.stale_malformed is True
+        assert [s.id for s in bom_doc.cited_sources] == ["real-src"]
+        assert bom_doc.links == ()
+        assert extract_inline_computation(bom_doc.body) == "SELECT 1 AS ok"
+
+    def test_hardening_sqlite_readonly_and_executor_receipt_contract(self, tmp_path: Path) -> None:
+        from datetime import UTC, datetime
+
+        from production_patterns.prod07_governed_knowledge_attestation.attestation import (
+            SqlEqualityAttester,
+            SqliteComputationExecutor,
+            execute_and_attest_computation,
+        )
+        from production_patterns.prod07_governed_knowledge_attestation.okf_bundle import OkfBundle
+
+        (tmp_path / "index.md").write_text('---\nokf_version: "0.3"\n---\n', encoding="utf-8")
+        # 1) 更新系 SQL (DELETE) は PRAGMA query_only = ON でエンジン層から拒否される
+        (tmp_path / "mutating_comp.md").write_text(
+            "---\n"
+            "type: Attested Computation\n"
+            "runtime: sqlite\n"
+            "executor:\n"
+            "  resource: /exec.md\n"
+            "  receipt: [job_id, executed_sql, rows]\n"
+            "attester:\n"
+            "  resource: /att.md\n"
+            "---\n"
+            "# Computation\n\n"
+            "```sql\n"
+            "DELETE FROM recognized_revenue\n"
+            "```\n",
+            encoding="utf-8",
+        )
+        # 2) executor.receipt がレシートに存在しないフィールドを宣言している場合は Attester が拒否 (§10.2)
+        (tmp_path / "missing_receipt_field.md").write_text(
+            "---\n"
+            "type: Attested Computation\n"
+            "runtime: sqlite\n"
+            "executor:\n"
+            "  resource: /exec.md\n"
+            "  receipt: [job_id, compiled_sql]\n"
+            "attester:\n"
+            "  resource: /att.md\n"
+            "---\n"
+            "# Computation\n\n"
+            "```sql\n"
+            "SELECT COUNT(*) AS cnt FROM recognized_revenue\n"
+            "```\n",
+            encoding="utf-8",
+        )
+
+        bundle = OkfBundle(tmp_path, now=datetime(2026, 11, 19, tzinfo=UTC))
+        executor = SqliteComputationExecutor()
+        attester = SqlEqualityAttester()
+
+        mut_res = execute_and_attest_computation(
+            bundle=bundle,
+            concept_id="mutating_comp",
+            parameters={},
+            executor=executor,
+            attester=attester,
+        )
+        assert mut_res["attested"] is False
+        assert "rows" not in mut_res
+        assert "readonly" in mut_res["attestation_reason"].lower()
+
+        missing_res = execute_and_attest_computation(
+            bundle=bundle,
+            concept_id="missing_receipt_field",
+            parameters={},
+            executor=executor,
+            attester=attester,
+        )
+        assert missing_res["attested"] is False
+        assert "rows" not in missing_res
+        assert "compiled_sql" in missing_res["attestation_reason"]
+
+

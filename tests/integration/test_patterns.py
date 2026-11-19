@@ -612,3 +612,15 @@ class TestProductionPatternsIntegration:
             "checkout-api のログを取得し、発生しているエラー原因を特定してください。",
         )
         assert len(response) > 20
+
+    @pytest.mark.asyncio
+    async def test_prod07_governed_knowledge_attestation(self):
+        mod = load_production_pattern_agent("prod07_governed_knowledge_attestation")
+        response = await run_agent_final_response(
+            mod.app,
+            mod.app.name,
+            "2026年度の認識売上 (Recognized Revenue) を承認済み計算で算出し、"
+            "使用した Concept の信頼ティアと検証ステータスを教えてください。",
+        )
+        assert len(response) > 20
+        assert "12,200,000" in response or "12200000" in response

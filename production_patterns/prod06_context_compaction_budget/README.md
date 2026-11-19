@@ -99,4 +99,4 @@ PYTHONPATH=. .venv/bin/python production_patterns/prod06_context_compaction_budg
 
 ## 次のステップ
 
-→ **[Production Patterns 一覧に戻る](../README.md)**: 6 つの本番運用デザインパターンの全体像と組み合わせ方を確認する
+→ **[PROD-07: Governed Knowledge & Attested Computation パターン](../prod07_governed_knowledge_attestation/)**: OKF v0.3 バンドルの段階的探索、信頼ティア自動降格・鮮度判定・廃止転送、および非 LLM 検証器による Fail-Closed 計算実行を学ぶ
